@@ -1,0 +1,11 @@
+# Release archives (uploaded separately)
+*.zip
+*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Weights (too large for git)
+weights/*.ckpt
+weights/*.th
