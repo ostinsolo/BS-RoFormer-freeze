@@ -1,0 +1,34 @@
+# Minimal requirements for BS-RoFormer / MelBand RoFormer INFERENCE ONLY
+# Tested and verified to work at ~63s for 6-stem separation
+
+# Core PyTorch
+torch==2.2.2
+torchaudio==2.2.2
+
+# NumPy (must be < 2 for compatibility)
+numpy<2
+
+# Audio I/O
+scipy
+soundfile
+librosa
+
+# Progress bar
+tqdm
+
+# Config loading
+pyyaml
+omegaconf
+ml_collections
+
+# BS-RoFormer model dependencies
+einops
+rotary-embedding-torch
+beartype
+loralib
+
+# For spectrograms (optional but used in inference.py)
+matplotlib
+
+# cx_Freeze (specific version that works)
+cx-Freeze==6.15.16
