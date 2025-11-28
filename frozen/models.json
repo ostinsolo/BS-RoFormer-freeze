@@ -50,16 +50,16 @@
   },
   "denoise": {
     "type": "mel_band_roformer",
-    "config": "configs/config_vocals_mel_band_roformer.yaml",
+    "config": "configs/config_denoise_mel_band_roformer.yaml",
     "checkpoint": "weights/denoise.ckpt",
-    "stems": ["clean", "noise"],
-    "description": "Remove noise"
+    "stems": ["dry", "other"],
+    "description": "Remove noise (dry=clean, other=noise)"
   },
   "dereverb": {
     "type": "mel_band_roformer",
-    "config": "configs/config_vocals_mel_band_roformer.yaml",
+    "config": "configs/config_dereverb_mel_band_roformer.yaml",
     "checkpoint": "weights/dereverb.ckpt",
-    "stems": ["dry", "reverb"],
+    "stems": ["noreverb", "reverb"],
     "description": "Remove reverb"
   },
   "drums_htdemucs": {
