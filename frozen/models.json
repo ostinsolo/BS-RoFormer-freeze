@@ -147,5 +147,35 @@
       "vocals"
     ],
     "description": "BS-RoFormer Resurrection - Instrumental (pcunwa)"
+  },
+  "gabox_inst_fv7z": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_gabox_inst.yaml",
+    "checkpoint": "weights/gabox_inst_fv7z.ckpt",
+    "stems": [
+      "Instrumental",
+      "Vocals"
+    ],
+    "description": "Gabox MelBand Inst Fv7z - Fullness 29.96"
+  },
+  "gabox_inst_fv8": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_gabox_inst.yaml",
+    "checkpoint": "weights/gabox_inst_fv8.ckpt",
+    "stems": [
+      "Instrumental",
+      "Vocals"
+    ],
+    "description": "Gabox MelBand Inst Fv8 (v2)"
+  },
+  "gabox_inst_fv4": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_gabox_inst.yaml",
+    "checkpoint": "weights/gabox_inst_fv4.ckpt",
+    "stems": [
+      "Instrumental",
+      "Vocals"
+    ],
+    "description": "Gabox MelBand Inst Fv4 - Not muddy"
   }
 }
