@@ -127,5 +127,25 @@
       "piano"
     ],
     "description": "Logic RoFormer 6-stem - BEST BASS SEPARATION"
+  },
+  "resurrection_vocals": {
+    "type": "bs_roformer",
+    "config": "configs/config_resurrection_vocals.yaml",
+    "checkpoint": "weights/resurrection_vocals.ckpt",
+    "stems": [
+      "vocals",
+      "other"
+    ],
+    "description": "BS-RoFormer Resurrection - Vocals (pcunwa)"
+  },
+  "resurrection_inst": {
+    "type": "bs_roformer",
+    "config": "configs/config_resurrection_inst.yaml",
+    "checkpoint": "weights/resurrection_inst.ckpt",
+    "stems": [
+      "other",
+      "vocals"
+    ],
+    "description": "BS-RoFormer Resurrection - Instrumental (pcunwa)"
   }
 }

@@ -434,8 +434,8 @@ class BSRoformer(Module):
             flash_attn=flash_attn,
             norm_output=False,
             sage_attention=sage_attention,
-            shared_qkv_bias=self.linear_62_bias_0, 
-            shared_out_bias=self.linear_64_bias_0, 
+            shared_qkv_bias=self.linear_62_bias_0 if use_shared_bias else None, 
+            shared_out_bias=self.linear_64_bias_0 if use_shared_bias else None, 
         )
 
         time_rotary_embed = RotaryEmbedding(dim=dim_head)

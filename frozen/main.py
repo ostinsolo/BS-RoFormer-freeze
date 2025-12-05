@@ -64,6 +64,20 @@ DEFAULT_MODELS = {
     },
     
     # === VOCALS ===
+    "resurrection_vocals": {
+        "type": "bs_roformer",
+        "config": "configs/config_resurrection_vocals.yaml",
+        "checkpoint": "weights/resurrection_vocals.ckpt",
+        "stems": ["vocals", "other"],
+        "description": "BS-RoFormer Resurrection - Vocals (pcunwa)"
+    },
+    "resurrection_inst": {
+        "type": "bs_roformer",
+        "config": "configs/config_resurrection_inst.yaml",
+        "checkpoint": "weights/resurrection_inst.ckpt",
+        "stems": ["other", "vocals"],
+        "description": "BS-RoFormer Resurrection - Instrumental"
+    },
     "vocals_melband": {
         "type": "mel_band_roformer",
         "config": "configs/KimberleyJensen/config_vocals_mel_band_roformer_kj.yaml",
