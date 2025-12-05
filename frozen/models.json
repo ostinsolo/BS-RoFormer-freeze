@@ -1,24 +1,10 @@
 {
-  "htdemucs_4stem": {
-    "type": "htdemucs",
-    "config": "configs/config_musdb18_htdemucs.yaml",
-    "checkpoint": "weights/htdemucs_4stem.th",
-    "stems": ["bass", "drums", "vocals", "other"],
-    "description": "HTDemucs 4-stem FASTEST"
-  },
   "bsroformer_4stem": {
     "type": "bs_roformer",
     "config": "configs/config_musdb18_bs_roformer.yaml",
     "checkpoint": "weights/bsroformer_4stem.ckpt",
     "stems": ["bass", "drums", "vocals", "other"],
     "description": "BS-RoFormer 4-stem HIGH QUALITY"
-  },
-  "htdemucs_6stem": {
-    "type": "htdemucs",
-    "config": "configs/config_htdemucs_6stems.yaml",
-    "checkpoint": "weights/htdemucs_6stem.th",
-    "stems": ["bass", "drums", "vocals", "other", "piano", "guitar"],
-    "description": "HTDemucs 6-stem FAST"
   },
   "bsrofo_sw": {
     "type": "bs_roformer",
@@ -61,27 +47,6 @@
     "checkpoint": "weights/dereverb.ckpt",
     "stems": ["noreverb", "reverb"],
     "description": "Remove reverb"
-  },
-  "drums_htdemucs": {
-    "type": "htdemucs",
-    "config": "configs/config_musdb18_htdemucs.yaml",
-    "checkpoint": "weights/drums_htdemucs.th",
-    "stems": ["drums"],
-    "description": "Drum extraction"
-  },
-  "bass_htdemucs": {
-    "type": "htdemucs",
-    "config": "configs/config_musdb18_htdemucs.yaml",
-    "checkpoint": "weights/bass_htdemucs.th",
-    "stems": ["bass"],
-    "description": "Bass extraction"
-  },
-  "drumsep_htdemucs": {
-    "type": "htdemucs",
-    "config": "configs/config_drumsep.yaml",
-    "checkpoint": "weights/drumsep_htdemucs.th",
-    "stems": ["kick", "snare", "cymbals", "toms"],
-    "description": "Drum kit 4-stem"
   },
   "drumsep_mdx23c_aufr33": {
     "type": "mdx23c",

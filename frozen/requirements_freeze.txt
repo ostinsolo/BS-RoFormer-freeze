@@ -1,5 +1,5 @@
-# Minimal requirements for BS-RoFormer / MelBand RoFormer INFERENCE ONLY
-# Tested and verified to work at ~63s for 6-stem separation
+# Minimal requirements for BS-RoFormer / MelBand RoFormer / MDX23C INFERENCE
+# NOTE: htdemucs models removed - use separate Demucs executable for those
 
 # Core PyTorch
 torch==2.2.2

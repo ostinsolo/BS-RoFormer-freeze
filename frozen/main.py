@@ -31,13 +31,7 @@ from tqdm.auto import tqdm
 
 DEFAULT_MODELS = {
     # === 4-STEM ===
-    "htdemucs_4stem": {
-        "type": "htdemucs",
-        "config": "configs/config_musdb18_htdemucs.yaml",
-        "checkpoint": "weights/htdemucs_4stem.th",
-        "stems": ["bass", "drums", "vocals", "other"],
-        "description": "HTDemucs 4-stem FASTEST"
-    },
+    # NOTE: htdemucs models removed - use Demucs executable for those
     "bsroformer_4stem": {
         "type": "bs_roformer",
         "config": "configs/config_musdb18_bs_roformer.yaml",
@@ -47,13 +41,6 @@ DEFAULT_MODELS = {
     },
     
     # === 6-STEM ===
-    "htdemucs_6stem": {
-        "type": "htdemucs",
-        "config": "configs/config_htdemucs_6stems.yaml",
-        "checkpoint": "weights/htdemucs_6stem.th",
-        "stems": ["bass", "drums", "vocals", "other", "piano", "guitar"],
-        "description": "HTDemucs 6-stem FAST"
-    },
     "bsrofo_sw": {
         "type": "bs_roformer",
         "config": "configs/config_bsrofo_sw_fixed.yaml",
@@ -101,30 +88,8 @@ DEFAULT_MODELS = {
         "description": "Remove reverb"
     },
     
-    # === SPECIALIZED ===
-    "drums_htdemucs": {
-        "type": "htdemucs",
-        "config": "configs/config_musdb18_htdemucs.yaml",
-        "checkpoint": "weights/drums_htdemucs.th",
-        "stems": ["drums"],
-        "description": "Drum extraction"
-    },
-    "bass_htdemucs": {
-        "type": "htdemucs",
-        "config": "configs/config_musdb18_htdemucs.yaml",
-        "checkpoint": "weights/bass_htdemucs.th",
-        "stems": ["bass"],
-        "description": "Bass extraction"
-    },
-    
     # === DRUM KIT SEPARATION ===
-    "drumsep_htdemucs": {
-        "type": "htdemucs",
-        "config": "configs/config_drumsep.yaml",
-        "checkpoint": "weights/drumsep_htdemucs.th",
-        "stems": ["kick", "snare", "cymbals", "toms"],
-        "description": "Drum kit 4-stem"
-    },
+    # NOTE: drumsep_htdemucs removed - use Demucs executable for that
     "drumsep_mdx23c_aufr33": {
         "type": "mdx23c",
         "config": "configs/config_drumsep_mdx23c_aufr33.yaml",
