@@ -1,10 +1,17 @@
 {
+  "scnet_xl_ihf": {
+    "type": "scnet",
+    "config": "configs/config_scnet_xl_ihf.yaml",
+    "checkpoint": "weights/scnet_xl_ihf.ckpt",
+    "stems": ["drums", "bass", "other", "vocals"],
+    "description": "SCNet XL IHF 4-stem BEST - SDR 10.08"
+  },
   "bsroformer_4stem": {
     "type": "bs_roformer",
-    "config": "configs/config_musdb18_bs_roformer.yaml",
+    "config": "configs/config_bs_roformer_4stem.yaml",
     "checkpoint": "weights/bsroformer_4stem.ckpt",
     "stems": ["bass", "drums", "vocals", "other"],
-    "description": "BS-RoFormer 4-stem HIGH QUALITY"
+    "description": "BS-RoFormer 4-stem HIGH QUALITY - SDR 9.65"
   },
   "bsrofo_sw": {
     "type": "bs_roformer",
