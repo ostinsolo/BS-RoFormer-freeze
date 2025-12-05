@@ -48,6 +48,13 @@ DEFAULT_MODELS = {
     },
     
     # === 6-STEM ===
+    "logic_roformer": {
+        "type": "bs_roformer",
+        "config": "configs/config_logic_roformer.yaml",
+        "checkpoint": "weights/logic_roformer.ckpt",
+        "stems": ["bass", "drums", "other", "vocals", "guitar", "piano"],
+        "description": "Logic RoFormer 6-stem - BEST BASS SEPARATION"
+    },
     "bsrofo_sw": {
         "type": "bs_roformer",
         "config": "configs/config_bsrofo_sw_fixed.yaml",

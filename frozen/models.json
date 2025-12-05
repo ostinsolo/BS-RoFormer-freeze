@@ -3,70 +3,129 @@
     "type": "scnet",
     "config": "configs/config_scnet_xl_ihf.yaml",
     "checkpoint": "weights/scnet_xl_ihf.ckpt",
-    "stems": ["drums", "bass", "other", "vocals"],
+    "stems": [
+      "drums",
+      "bass",
+      "other",
+      "vocals"
+    ],
     "description": "SCNet XL IHF 4-stem BEST - SDR 10.08"
   },
   "bsroformer_4stem": {
     "type": "bs_roformer",
     "config": "configs/config_bs_roformer_4stem.yaml",
     "checkpoint": "weights/bsroformer_4stem.ckpt",
-    "stems": ["bass", "drums", "vocals", "other"],
+    "stems": [
+      "bass",
+      "drums",
+      "vocals",
+      "other"
+    ],
     "description": "BS-RoFormer 4-stem HIGH QUALITY - SDR 9.65"
   },
   "bsrofo_sw": {
     "type": "bs_roformer",
     "config": "configs/config_bsrofo_sw_fixed.yaml",
     "checkpoint": "weights/bsrofo_sw_fixed.ckpt",
-    "stems": ["bass", "drums", "vocals", "other", "guitar", "piano"],
+    "stems": [
+      "bass",
+      "drums",
+      "vocals",
+      "other",
+      "guitar",
+      "piano"
+    ],
     "description": "BS-ROFO-SW 6-stem BEST"
   },
   "vocals_melband": {
     "type": "mel_band_roformer",
     "config": "configs/KimberleyJensen/config_vocals_mel_band_roformer_kj.yaml",
     "checkpoint": "weights/MelBandRoformer_kj.ckpt",
-    "stems": ["vocals", "other"],
+    "stems": [
+      "vocals",
+      "other"
+    ],
     "description": "MelBand RoFormer vocals BEST"
   },
   "vocals_bsroformer_viperx": {
     "type": "bs_roformer",
     "config": "configs/viperx/model_bs_roformer_ep_317_sdr_12.9755.yaml",
     "checkpoint": "weights/vocals_bsroformer_viperx.ckpt",
-    "stems": ["vocals", "other"],
+    "stems": [
+      "vocals",
+      "other"
+    ],
     "description": "BS-RoFormer vocals HIGH QUALITY"
   },
   "vocals_mdx23c": {
     "type": "mdx23c",
     "config": "configs/config_vocals_mdx23c.yaml",
     "checkpoint": "weights/vocals_mdx23c.ckpt",
-    "stems": ["vocals", "other"],
+    "stems": [
+      "vocals",
+      "other"
+    ],
     "description": "MDX23C vocals FAST"
   },
   "denoise": {
     "type": "mel_band_roformer",
     "config": "configs/config_denoise_mel_band_roformer.yaml",
     "checkpoint": "weights/denoise.ckpt",
-    "stems": ["dry", "other"],
+    "stems": [
+      "dry",
+      "other"
+    ],
     "description": "Remove noise (dry=clean, other=noise)"
   },
   "dereverb": {
     "type": "mel_band_roformer",
     "config": "configs/config_dereverb_mel_band_roformer.yaml",
     "checkpoint": "weights/dereverb.ckpt",
-    "stems": ["noreverb", "reverb"],
+    "stems": [
+      "noreverb",
+      "reverb"
+    ],
     "description": "Remove reverb"
   },
   "drumsep_mdx23c_aufr33": {
     "type": "mdx23c",
     "config": "configs/config_drumsep_mdx23c_aufr33.yaml",
     "checkpoint": "weights/drumsep_mdx23c_aufr33.ckpt",
-    "stems": ["kick", "snare", "toms", "hh", "ride", "crash"],
+    "stems": [
+      "kick",
+      "snare",
+      "toms",
+      "hh",
+      "ride",
+      "crash"
+    ],
     "description": "Drum kit 6-stem"
   },
   "drumsep_mdx23c_jarredou": {
     "type": "mdx23c",
     "config": "configs/config_drumsep_mdx23c_jarredou.yaml",
     "checkpoint": "weights/drumsep_mdx23c_jarredou.ckpt",
-    "stems": ["kick", "snare", "toms", "hh", "cymbals"],
+    "stems": [
+      "kick",
+      "snare",
+      "toms",
+      "hh",
+      "cymbals"
+    ],
     "description": "Drum kit 5-stem BEST"
+  },
+  "logic_roformer": {
+    "type": "bs_roformer",
+    "config": "configs/config_logic_roformer.yaml",
+    "checkpoint": "weights/logic_roformer.ckpt",
+    "stems": [
+      "bass",
+      "drums",
+      "other",
+      "vocals",
+      "guitar",
+      "piano"
+    ],
+    "description": "Logic RoFormer 6-stem - BEST BASS SEPARATION"
   }
 }
