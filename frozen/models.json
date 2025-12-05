@@ -177,5 +177,68 @@
       "Vocals"
     ],
     "description": "Gabox MelBand Inst Fv4 - Not muddy"
+  },
+  "aname_4stem_large": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_aname_4stem_large.yaml",
+    "checkpoint": "weights/aname_4stem_large.ckpt",
+    "stems": [
+      "drums",
+      "bass",
+      "other",
+      "vocals"
+    ],
+    "description": "Aname 4-stem Large - Drums 9.72, Bass 9.40 (3.5GB)"
+  },
+  "revive2_vocals": {
+    "type": "bs_roformer",
+    "config": "configs/config_revive.yaml",
+    "checkpoint": "weights/revive2_vocals.ckpt",
+    "stems": [
+      "vocals",
+      "other"
+    ],
+    "description": "BS-RoFormer Revive 2 - HIGHEST Bleedless 40.07"
+  },
+  "revive3e_vocals": {
+    "type": "bs_roformer",
+    "config": "configs/config_revive.yaml",
+    "checkpoint": "weights/revive3e_vocals.ckpt",
+    "stems": [
+      "vocals",
+      "other"
+    ],
+    "description": "BS-RoFormer Revive 3e - Maximum Fullness"
+  },
+  "inst_v1e_plus": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_inst_v1e_plus.yaml",
+    "checkpoint": "weights/inst_v1e_plus.ckpt",
+    "stems": [
+      "Instrumental",
+      "Vocals"
+    ],
+    "description": "Unwa V1e+ Inst - Fullness 37.89, Less noise"
+  },
+  "karaoke_becruily": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_karaoke_becruily.yaml",
+    "checkpoint": "weights/karaoke_becruily.ckpt",
+    "stems": [
+      "lead_vocals",
+      "backing_vocals",
+      "instrumental"
+    ],
+    "description": "Becruily Karaoke - BEST lead/backing separation"
+  },
+  "karaoke_aufr33": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_karaoke_aufr33.yaml",
+    "checkpoint": "weights/karaoke_aufr33.ckpt",
+    "stems": [
+      "vocals",
+      "instrumental"
+    ],
+    "description": "Aufr33/Viperx Karaoke - SDR 10.19"
   }
 }
