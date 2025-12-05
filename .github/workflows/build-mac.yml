@@ -1,0 +1,129 @@
+name: build-mac
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-mac-intel:
+    name: Build mss-separate for macOS Intel
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install --upgrade pip
+      - run: pip install torch==2.2.2 torchaudio==2.2.2
+      - run: pip install "numpy<2" scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib cx-Freeze==6.15.16
+      - run: |
+          cd frozen
+          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
+      - run: |
+          cp -r configs frozen/dist/
+          cp -r models frozen/dist/
+          cp -r utils frozen/dist/
+          mkdir -p frozen/dist/weights
+      - run: |
+          SOUNDFILE_DATA=$(python -c "import soundfile; import os; print(os.path.dirname(soundfile.__file__))")/_soundfile_data
+          if [ -d "$SOUNDFILE_DATA" ]; then
+            mkdir -p frozen/dist/lib
+            cp -r "$SOUNDFILE_DATA" frozen/dist/lib/
+          fi
+      - run: |
+          chmod +x frozen/dist/mss-separate
+          ./frozen/dist/mss-separate --list-models
+      - run: |
+          cd frozen
+          tar -czf ../mss-separate-macos-intel.tar.gz dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mss-separate-macos-intel
+          path: mss-separate-macos-intel.tar.gz
+
+  build-mac-arm:
+    name: Build mss-separate for macOS ARM (Apple Silicon)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install --upgrade pip
+      - run: pip install torch==2.2.2 torchaudio==2.2.2
+      - run: pip install "numpy<2" scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib cx-Freeze==6.15.16
+      - run: |
+          cd frozen
+          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
+      - run: |
+          cp -r configs frozen/dist/
+          cp -r models frozen/dist/
+          cp -r utils frozen/dist/
+          mkdir -p frozen/dist/weights
+      - run: |
+          SOUNDFILE_DATA=$(python -c "import soundfile; import os; print(os.path.dirname(soundfile.__file__))")/_soundfile_data
+          if [ -d "$SOUNDFILE_DATA" ]; then
+            mkdir -p frozen/dist/lib
+            cp -r "$SOUNDFILE_DATA" frozen/dist/lib/
+          fi
+      - run: |
+          chmod +x frozen/dist/mss-separate
+          ./frozen/dist/mss-separate --list-models
+      - run: |
+          cd frozen
+          tar -czf ../mss-separate-macos-arm.tar.gz dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mss-separate-macos-arm
+          path: mss-separate-macos-arm.tar.gz
+
+  release:
+    name: Create macOS Release
+    needs: [build-mac-intel, build-mac-arm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mss-separate-macos-intel
+          path: ./artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: mss-separate-macos-arm
+          path: ./artifacts
+      - run: ls -la ./artifacts/
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## BS-RoFormer ${{ github.ref_name }} - macOS
+            
+            State-of-the-art music source separation using BS-RoFormer architecture.
+            
+            ### Supported Models (9 total)
+            - bsroformer_4stem, bsrofo_sw (6-stem)
+            - vocals_melband (SDR 10.98), vocals_bsroformer_viperx, vocals_mdx23c
+            - denoise (SDR 27.99), dereverb (SDR 19.17)
+            - drumsep_mdx23c_aufr33, drumsep_mdx23c_jarredou
+            
+            ### macOS Downloads
+            | Platform | File |
+            |----------|------|
+            | macOS Intel | mss-separate-macos-intel.tar.gz |
+            | macOS ARM | mss-separate-macos-arm.tar.gz |
+            
+            *Windows builds available separately*
+          files: |
+            ./artifacts/mss-separate-macos-intel.tar.gz
+            ./artifacts/mss-separate-macos-arm.tar.gz
+          draft: false
+          prerelease: false
+

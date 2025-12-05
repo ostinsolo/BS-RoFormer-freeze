@@ -1,0 +1,137 @@
+name: build-windows
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows-cpu:
+    name: Build mss-separate for Windows (CPU)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install --upgrade pip
+      - run: pip install "numpy<2" "cx-Freeze==6.15.16"
+      - run: pip install torch==2.2.2 torchaudio==2.2.2
+      - run: pip install scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib
+      - run: |
+          cd frozen
+          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
+      - run: |
+          Copy-Item -Path "configs" -Destination "frozen/dist/configs" -Recurse
+          Copy-Item -Path "models" -Destination "frozen/dist/models" -Recurse
+          Copy-Item -Path "utils" -Destination "frozen/dist/utils" -Recurse
+          New-Item -ItemType Directory -Force -Path "frozen/dist/weights"
+        shell: pwsh
+      - run: |
+          $soundfileDir = python -c "import soundfile; import os; print(os.path.dirname(soundfile.__file__))"
+          $soundfileData = Join-Path $soundfileDir "_soundfile_data"
+          if (Test-Path $soundfileData) {
+            New-Item -ItemType Directory -Force -Path "frozen/dist/lib"
+            Copy-Item -Path $soundfileData -Destination "frozen/dist/lib/_soundfile_data" -Recurse
+          }
+        shell: pwsh
+      - run: .\frozen\dist\mss-separate.exe --list-models
+      - run: Compress-Archive -Path "frozen/dist" -DestinationPath "mss-separate-win-cpu.zip"
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mss-separate-win-cpu
+          path: mss-separate-win-cpu.zip
+
+  build-windows-cuda:
+    name: Build mss-separate for Windows (CUDA)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install --upgrade pip
+      - run: pip install "numpy<2" "cx-Freeze==6.15.16"
+      - run: pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+      - run: pip install scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib
+      - run: |
+          cd frozen
+          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
+      - run: |
+          Copy-Item -Path "configs" -Destination "frozen/dist/configs" -Recurse
+          Copy-Item -Path "models" -Destination "frozen/dist/models" -Recurse
+          Copy-Item -Path "utils" -Destination "frozen/dist/utils" -Recurse
+          New-Item -ItemType Directory -Force -Path "frozen/dist/weights"
+        shell: pwsh
+      - run: |
+          $soundfileDir = python -c "import soundfile; import os; print(os.path.dirname(soundfile.__file__))"
+          $soundfileData = Join-Path $soundfileDir "_soundfile_data"
+          if (Test-Path $soundfileData) {
+            New-Item -ItemType Directory -Force -Path "frozen/dist/lib"
+            Copy-Item -Path $soundfileData -Destination "frozen/dist/lib/_soundfile_data" -Recurse
+          }
+        shell: pwsh
+      - run: .\frozen\dist\mss-separate.exe --list-models
+      - run: Invoke-WebRequest -Uri https://www.7-zip.org/a/7zr.exe -OutFile 7zr.exe
+        shell: pwsh
+      - run: Invoke-WebRequest -Uri https://www.7-zip.org/a/7z2201-x64.exe -OutFile 7zInstaller-x64.exe
+        shell: pwsh
+      - run: .\7zr.exe x "7zInstaller-x64.exe"
+        shell: pwsh
+      - run: .\7z.exe a -m0=lzma2 -mmt=on -mx=9 "mss-separate-win-cuda.7z" "frozen/dist"
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mss-separate-win-cuda
+          path: mss-separate-win-cuda.7z
+
+  release:
+    name: Create Windows Release
+    needs: [build-windows-cpu, build-windows-cuda]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mss-separate-win-cpu
+          path: ./artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: mss-separate-win-cuda
+          path: ./artifacts
+      - run: ls -la ./artifacts/
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}-win
+          name: Release ${{ github.ref_name }} Windows
+          body: |
+            ## BS-RoFormer ${{ github.ref_name }} - Windows
+            
+            State-of-the-art music source separation using BS-RoFormer architecture.
+            
+            ### Supported Models (9 total)
+            - bsroformer_4stem, bsrofo_sw (6-stem)
+            - vocals_melband (SDR 10.98), vocals_bsroformer_viperx, vocals_mdx23c
+            - denoise (SDR 27.99), dereverb (SDR 19.17)
+            - drumsep_mdx23c_aufr33, drumsep_mdx23c_jarredou
+            
+            ### Windows Downloads
+            | Platform | File | Notes |
+            |----------|------|-------|
+            | Windows CPU | mss-separate-win-cpu.zip | CPU only |
+            | Windows CUDA | mss-separate-win-cuda.7z | GPU accelerated |
+            
+            *macOS builds available separately*
+          files: |
+            ./artifacts/mss-separate-win-cpu.zip
+            ./artifacts/mss-separate-win-cuda.7z
+          draft: false
+          prerelease: false
+
