@@ -8,7 +8,7 @@ on:
 jobs:
   build-mac-intel:
     name: Build mss-separate for macOS Intel
-    runs-on: macos-13
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
