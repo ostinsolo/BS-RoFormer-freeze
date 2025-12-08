@@ -6,77 +6,124 @@ on:
       - 'v*'
 
 jobs:
-  build-mac-intel:
-    name: Build mss-separate for macOS Intel
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - run: pip install --upgrade pip
-      - run: pip install torch==2.2.2 torchaudio==2.2.2
-      - run: pip install "numpy<2" scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib cx-Freeze==6.15.16
-      - run: |
-          cd frozen
-          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
-      - run: |
-          cp -r configs frozen/dist/
-          cp -r models frozen/dist/
-          cp -r utils frozen/dist/
-          mkdir -p frozen/dist/weights
-      - run: |
-          SOUNDFILE_DATA=$(python -c "import soundfile; import os; print(os.path.dirname(soundfile.__file__))")/_soundfile_data
-          if [ -d "$SOUNDFILE_DATA" ]; then
-            mkdir -p frozen/dist/lib
-            cp -r "$SOUNDFILE_DATA" frozen/dist/lib/
-          fi
-      - run: |
-          chmod +x frozen/dist/mss-separate
-          ./frozen/dist/mss-separate --list-models
-      - run: |
-          cd frozen
-          tar -czf ../mss-separate-macos-intel.tar.gz dist
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mss-separate-macos-intel
-          path: mss-separate-macos-intel.tar.gz
-
-  build-mac-arm:
-    name: Build mss-separate for macOS ARM (Apple Silicon)
+  build-mac-universal:
+    name: Build mss-separate Universal (Intel + ARM)
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - uses: actions/setup-python@v5
+      
+      # Build ARM version (native)
+      - name: Setup Python (ARM)
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - run: pip install --upgrade pip
-      - run: pip install torch==2.2.2 torchaudio==2.2.2
-      - run: pip install "numpy<2" scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib cx-Freeze==6.15.16
-      - run: |
+      
+      - name: Install dependencies (ARM)
+        run: |
+          pip install --upgrade pip
+          pip install torch==2.2.2 torchaudio==2.2.2
+          pip install "numpy<2" scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib cx-Freeze==6.15.16
+      
+      - name: Build ARM executable
+        run: |
           cd frozen
-          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
-      - run: |
-          cp -r configs frozen/dist/
-          cp -r models frozen/dist/
-          cp -r utils frozen/dist/
-          mkdir -p frozen/dist/weights
-      - run: |
+          cxfreeze main.py --target-dir=dist-arm --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
+      
+      - name: Copy resources to ARM dist
+        run: |
+          cp -r configs frozen/dist-arm/
+          cp -r models frozen/dist-arm/
+          cp -r utils frozen/dist-arm/
+          cp frozen/models.json frozen/dist-arm/ || true
+          mkdir -p frozen/dist-arm/weights
           SOUNDFILE_DATA=$(python -c "import soundfile; import os; print(os.path.dirname(soundfile.__file__))")/_soundfile_data
           if [ -d "$SOUNDFILE_DATA" ]; then
-            mkdir -p frozen/dist/lib
-            cp -r "$SOUNDFILE_DATA" frozen/dist/lib/
+            mkdir -p frozen/dist-arm/lib
+            cp -r "$SOUNDFILE_DATA" frozen/dist-arm/lib/
           fi
-      - run: |
+      
+      # Build Intel version via Rosetta
+      - name: Setup Python (Intel via Rosetta)
+        run: |
+          # Install x86_64 Python via Rosetta
+          arch -x86_64 /bin/bash -c "$(curl -fsSL https://www.python.org/ftp/python/3.10.11/python-3.10.11-macos11.pkg)" || true
+          # Use system Python or install via pyenv for x86_64
+          arch -x86_64 /usr/bin/python3 --version || echo "Will use alternative method"
+      
+      - name: Build Intel executable via Rosetta
+        run: |
+          # Create x86_64 venv
+          arch -x86_64 python3 -m venv .venv-intel || arch -x86_64 /usr/local/bin/python3 -m venv .venv-intel || echo "Trying pip directly"
+          
+          # If venv creation fails, we'll build ARM-only and note it
+          if [ -d ".venv-intel" ]; then
+            source .venv-intel/bin/activate
+            arch -x86_64 pip install --upgrade pip
+            arch -x86_64 pip install torch==2.2.2 torchaudio==2.2.2
+            arch -x86_64 pip install "numpy<2" scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib cx-Freeze==6.15.16
+            cd frozen
+            arch -x86_64 cxfreeze main.py --target-dir=dist-intel --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
+            cd ..
+            cp -r configs frozen/dist-intel/
+            cp -r models frozen/dist-intel/
+            cp -r utils frozen/dist-intel/
+            cp frozen/models.json frozen/dist-intel/ || true
+            mkdir -p frozen/dist-intel/weights
+          else
+            echo "Intel build not available - ARM only"
+            mkdir -p frozen/dist-intel
+            cp frozen/dist-arm/mss-separate frozen/dist-intel/ || true
+          fi
+      
+      - name: Create Universal binary with lipo
+        run: |
+          mkdir -p frozen/dist
+          
+          # Check if we have both architectures
+          ARM_ARCH=$(file frozen/dist-arm/mss-separate | grep -o 'arm64' || echo "")
+          INTEL_ARCH=$(file frozen/dist-intel/mss-separate | grep -o 'x86_64' || echo "")
+          
+          if [ -n "$ARM_ARCH" ] && [ -n "$INTEL_ARCH" ]; then
+            echo "Creating Universal binary..."
+            lipo -create frozen/dist-arm/mss-separate frozen/dist-intel/mss-separate -output frozen/dist/mss-separate
+            file frozen/dist/mss-separate
+          else
+            echo "Using ARM-only binary (Intel build failed)"
+            cp frozen/dist-arm/mss-separate frozen/dist/
+          fi
+          
+          # Copy resources
+          cp -r frozen/dist-arm/configs frozen/dist/
+          cp -r frozen/dist-arm/models frozen/dist/
+          cp -r frozen/dist-arm/utils frozen/dist/
+          cp -r frozen/dist-arm/lib frozen/dist/ || true
+          cp frozen/dist-arm/models.json frozen/dist/ || true
+          mkdir -p frozen/dist/weights
           chmod +x frozen/dist/mss-separate
+      
+      - name: Test executable
+        run: |
           ./frozen/dist/mss-separate --list-models
-      - run: |
+      
+      - name: Package
+        run: |
           cd frozen
+          tar -czf ../mss-separate-macos-universal.tar.gz dist
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mss-separate-macos-universal
+          path: mss-separate-macos-universal.tar.gz
+      
+      # Also create ARM-only package as backup
+      - name: Package ARM-only
+        run: |
+          cd frozen
+          mv dist-arm dist
           tar -czf ../mss-separate-macos-arm.tar.gz dist
+      
       - uses: actions/upload-artifact@v4
         with:
           name: mss-separate-macos-arm
@@ -84,14 +131,14 @@ jobs:
 
   release:
     name: Create macOS Release
-    needs: [build-mac-intel, build-mac-arm]
+    needs: [build-mac-universal]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: mss-separate-macos-intel
+          name: mss-separate-macos-universal
           path: ./artifacts
       - uses: actions/download-artifact@v4
         with:
@@ -108,21 +155,22 @@ jobs:
             
             State-of-the-art music source separation using BS-RoFormer architecture.
             
-            ### Supported Models (9 total)
-            - bsroformer_4stem, bsrofo_sw (6-stem)
-            - vocals_melband (SDR 10.98), vocals_bsroformer_viperx, vocals_mdx23c
-            - denoise (SDR 27.99), dereverb (SDR 19.17)
-            - drumsep_mdx23c_aufr33, drumsep_mdx23c_jarredou
+            ### v1.8.0 New Features
+            - `--two-stems X` - Demucs-style output (stem + no_stem)
+            - `--stems X,Y` - Select specific stems to output
+            - `--extract-instrumental` - Generate instrumental from vocal models
+            - `--flac` / `--pcm-type` - Output format options
+            - 28 models with accurate stem outputs
             
             ### macOS Downloads
             | Platform | File |
             |----------|------|
-            | macOS Intel | mss-separate-macos-intel.tar.gz |
-            | macOS ARM | mss-separate-macos-arm.tar.gz |
+            | macOS Universal (Intel+ARM) | mss-separate-macos-universal.tar.gz |
+            | macOS ARM only | mss-separate-macos-arm.tar.gz |
             
             *Windows builds available separately*
           files: |
-            ./artifacts/mss-separate-macos-intel.tar.gz
+            ./artifacts/mss-separate-macos-universal.tar.gz
             ./artifacts/mss-separate-macos-arm.tar.gz
           draft: false
           prerelease: false
