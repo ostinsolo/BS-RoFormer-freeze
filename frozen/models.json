@@ -3,242 +3,196 @@
     "type": "scnet",
     "config": "configs/config_scnet_xl_ihf.yaml",
     "checkpoint": "weights/scnet_xl_ihf.ckpt",
-    "stems": [
-      "drums",
-      "bass",
-      "other",
-      "vocals"
-    ],
-    "description": "SCNet XL IHF 4-stem BEST - SDR 10.08"
+    "stems": ["drums", "bass", "other", "vocals"],
+    "description": "4-stem BEST - SDR 10.08"
   },
   "bsroformer_4stem": {
     "type": "bs_roformer",
     "config": "configs/config_bs_roformer_4stem.yaml",
     "checkpoint": "weights/bsroformer_4stem.ckpt",
-    "stems": [
-      "bass",
-      "drums",
-      "vocals",
-      "other"
-    ],
-    "description": "BS-RoFormer 4-stem HIGH QUALITY - SDR 9.65"
-  },
-  "bsrofo_sw": {
-    "type": "bs_roformer",
-    "config": "configs/config_bsrofo_sw_fixed.yaml",
-    "checkpoint": "weights/bsrofo_sw_fixed.ckpt",
-    "stems": [
-      "bass",
-      "drums",
-      "vocals",
-      "other",
-      "guitar",
-      "piano"
-    ],
-    "description": "BS-ROFO-SW 6-stem BEST"
-  },
-  "vocals_melband": {
-    "type": "mel_band_roformer",
-    "config": "configs/KimberleyJensen/config_vocals_mel_band_roformer_kj.yaml",
-    "checkpoint": "weights/MelBandRoformer_kj.ckpt",
-    "stems": [
-      "vocals",
-      "other"
-    ],
-    "description": "MelBand RoFormer vocals BEST"
-  },
-  "vocals_bsroformer_viperx": {
-    "type": "bs_roformer",
-    "config": "configs/viperx/model_bs_roformer_ep_317_sdr_12.9755.yaml",
-    "checkpoint": "weights/vocals_bsroformer_viperx.ckpt",
-    "stems": [
-      "vocals",
-      "other"
-    ],
-    "description": "BS-RoFormer vocals HIGH QUALITY"
-  },
-  "vocals_mdx23c": {
-    "type": "mdx23c",
-    "config": "configs/config_vocals_mdx23c.yaml",
-    "checkpoint": "weights/vocals_mdx23c.ckpt",
-    "stems": [
-      "vocals",
-      "other"
-    ],
-    "description": "MDX23C vocals FAST"
-  },
-  "denoise": {
-    "type": "mel_band_roformer",
-    "config": "configs/config_denoise_mel_band_roformer.yaml",
-    "checkpoint": "weights/denoise.ckpt",
-    "stems": [
-      "dry",
-      "other"
-    ],
-    "description": "Remove noise (dry=clean, other=noise)"
-  },
-  "dereverb": {
-    "type": "mel_band_roformer",
-    "config": "configs/config_dereverb_mel_band_roformer.yaml",
-    "checkpoint": "weights/dereverb.ckpt",
-    "stems": [
-      "noreverb",
-      "reverb"
-    ],
-    "description": "Remove reverb"
-  },
-  "drumsep_mdx23c_aufr33": {
-    "type": "mdx23c",
-    "config": "configs/config_drumsep_mdx23c_aufr33.yaml",
-    "checkpoint": "weights/drumsep_mdx23c_aufr33.ckpt",
-    "stems": [
-      "kick",
-      "snare",
-      "toms",
-      "hh",
-      "ride",
-      "crash"
-    ],
-    "description": "Drum kit 6-stem"
-  },
-  "drumsep_mdx23c_jarredou": {
-    "type": "mdx23c",
-    "config": "configs/config_drumsep_mdx23c_jarredou.yaml",
-    "checkpoint": "weights/drumsep_mdx23c_jarredou.ckpt",
-    "stems": [
-      "kick",
-      "snare",
-      "toms",
-      "hh",
-      "cymbals"
-    ],
-    "description": "Drum kit 5-stem BEST"
-  },
-  "logic_roformer": {
-    "type": "bs_roformer",
-    "config": "configs/config_logic_roformer.yaml",
-    "checkpoint": "weights/logic_roformer.ckpt",
-    "stems": [
-      "bass",
-      "drums",
-      "other",
-      "vocals",
-      "guitar",
-      "piano"
-    ],
-    "description": "Logic RoFormer 6-stem - BEST BASS SEPARATION"
-  },
-  "resurrection_vocals": {
-    "type": "bs_roformer",
-    "config": "configs/config_resurrection_vocals.yaml",
-    "checkpoint": "weights/resurrection_vocals.ckpt",
-    "stems": [
-      "vocals",
-      "other"
-    ],
-    "description": "BS-RoFormer Resurrection - Vocals (pcunwa)"
-  },
-  "resurrection_inst": {
-    "type": "bs_roformer",
-    "config": "configs/config_resurrection_inst.yaml",
-    "checkpoint": "weights/resurrection_inst.ckpt",
-    "stems": [
-      "other",
-      "vocals"
-    ],
-    "description": "BS-RoFormer Resurrection - Instrumental (pcunwa)"
-  },
-  "gabox_inst_fv7z": {
-    "type": "mel_band_roformer",
-    "config": "configs/config_gabox_inst.yaml",
-    "checkpoint": "weights/gabox_inst_fv7z.ckpt",
-    "stems": [
-      "Instrumental",
-      "Vocals"
-    ],
-    "description": "Gabox MelBand Inst Fv7z - Fullness 29.96"
-  },
-  "gabox_inst_fv8": {
-    "type": "mel_band_roformer",
-    "config": "configs/config_gabox_inst.yaml",
-    "checkpoint": "weights/gabox_inst_fv8.ckpt",
-    "stems": [
-      "Instrumental",
-      "Vocals"
-    ],
-    "description": "Gabox MelBand Inst Fv8 (v2)"
-  },
-  "gabox_inst_fv4": {
-    "type": "mel_band_roformer",
-    "config": "configs/config_gabox_inst.yaml",
-    "checkpoint": "weights/gabox_inst_fv4.ckpt",
-    "stems": [
-      "Instrumental",
-      "Vocals"
-    ],
-    "description": "Gabox MelBand Inst Fv4 - Not muddy"
+    "stems": ["bass", "drums", "vocals", "other"],
+    "description": "4-stem HIGH QUALITY - SDR 9.65"
   },
   "aname_4stem_large": {
     "type": "mel_band_roformer",
     "config": "configs/config_aname_4stem_large.yaml",
     "checkpoint": "weights/aname_4stem_large.ckpt",
-    "stems": [
-      "drums",
-      "bass",
-      "other",
-      "vocals"
-    ],
-    "description": "Aname 4-stem Large - Drums 9.72, Bass 9.40 (3.5GB)"
+    "stems": ["drums", "bass", "other", "vocals"],
+    "description": "4-stem Large - BEST Drums 9.72"
+  },
+  "logic_roformer": {
+    "type": "bs_roformer",
+    "config": "configs/config_logic_roformer.yaml",
+    "checkpoint": "weights/logic_roformer.ckpt",
+    "stems": ["bass", "drums", "other", "vocals", "guitar", "piano"],
+    "description": "6-stem BEST BASS - Community model"
+  },
+  "bsrofo_sw": {
+    "type": "bs_roformer",
+    "config": "configs/config_bsrofo_sw_fixed.yaml",
+    "checkpoint": "weights/bsrofo_sw_fixed.ckpt",
+    "stems": ["bass", "drums", "vocals", "other", "guitar", "piano"],
+    "description": "6-stem BEST - By jarredou"
+  },
+  "vocals_melband": {
+    "type": "mel_band_roformer",
+    "config": "configs/KimberleyJensen/config_vocals_mel_band_roformer_kj.yaml",
+    "checkpoint": "weights/MelBandRoformer_kj.ckpt",
+    "stems": ["vocals"],
+    "description": "Vocals BEST - SDR 10.98 (use --extract-instrumental for inst)"
+  },
+  "vocals_bsroformer_viperx": {
+    "type": "bs_roformer",
+    "config": "configs/viperx/model_bs_roformer_ep_317_sdr_12.9755.yaml",
+    "checkpoint": "weights/vocals_bsroformer_viperx.ckpt",
+    "stems": ["vocals"],
+    "description": "Vocals HIGH QUALITY - SDR 10.87 (use --extract-instrumental for inst)"
+  },
+  "vocals_mdx23c": {
+    "type": "mdx23c",
+    "config": "configs/config_vocals_mdx23c.yaml",
+    "checkpoint": "weights/vocals_mdx23c.ckpt",
+    "stems": ["vocals", "other"],
+    "description": "Vocals FAST - SDR 10.17"
+  },
+  "resurrection_vocals": {
+    "type": "bs_roformer",
+    "config": "configs/config_resurrection_vocals.yaml",
+    "checkpoint": "weights/resurrection_vocals.ckpt",
+    "stems": ["vocals"],
+    "description": "BS-RoFormer Resurrection Vocals (use --extract-instrumental for inst)"
   },
   "revive2_vocals": {
     "type": "bs_roformer",
     "config": "configs/config_revive.yaml",
     "checkpoint": "weights/revive2_vocals.ckpt",
-    "stems": [
-      "vocals",
-      "other"
-    ],
-    "description": "BS-RoFormer Revive 2 - HIGHEST Bleedless 40.07"
+    "stems": ["vocals"],
+    "description": "Revive 2 - HIGHEST Bleedless 40.07 (use --extract-instrumental for inst)"
   },
   "revive3e_vocals": {
     "type": "bs_roformer",
     "config": "configs/config_revive.yaml",
     "checkpoint": "weights/revive3e_vocals.ckpt",
-    "stems": [
-      "vocals",
-      "other"
-    ],
-    "description": "BS-RoFormer Revive 3e - Maximum Fullness"
+    "stems": ["vocals"],
+    "description": "Revive 3e - Maximum Fullness (use --extract-instrumental for inst)"
+  },
+  "resurrection_inst": {
+    "type": "bs_roformer",
+    "config": "configs/config_resurrection_inst.yaml",
+    "checkpoint": "weights/resurrection_inst.ckpt",
+    "stems": ["other"],
+    "description": "BS-RoFormer Resurrection Instrumental (other=inst)"
+  },
+  "gabox_inst_fv7z": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_gabox_inst.yaml",
+    "checkpoint": "weights/gabox_inst_fv7z.ckpt",
+    "stems": ["Instrumental"],
+    "description": "Gabox Inst Fv7z - Fullness 29.96"
+  },
+  "gabox_inst_fv8": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_gabox_inst.yaml",
+    "checkpoint": "weights/gabox_inst_fv8.ckpt",
+    "stems": ["Instrumental"],
+    "description": "Gabox Inst Fv8 (v2)"
+  },
+  "gabox_inst_fv4": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_gabox_inst.yaml",
+    "checkpoint": "weights/gabox_inst_fv4.ckpt",
+    "stems": ["Instrumental"],
+    "description": "Gabox Inst Fv4 - Not muddy"
   },
   "inst_v1e_plus": {
     "type": "mel_band_roformer",
     "config": "configs/config_inst_v1e_plus.yaml",
     "checkpoint": "weights/inst_v1e_plus.ckpt",
-    "stems": [
-      "Instrumental",
-      "Vocals"
-    ],
-    "description": "Unwa V1e+ Inst - Fullness 37.89, Less noise"
+    "stems": ["other"],
+    "description": "Unwa V1e+ Inst - Fullness 37.89 (other=inst)"
   },
   "karaoke_becruily": {
     "type": "mel_band_roformer",
     "config": "configs/config_karaoke_becruily.yaml",
     "checkpoint": "weights/karaoke_becruily.ckpt",
-    "stems": [
-      "lead_vocals",
-      "backing_vocals",
-      "instrumental"
-    ],
+    "stems": ["lead_vocals", "backing_vocals", "instrumental"],
     "description": "Becruily Karaoke - BEST lead/backing separation"
   },
   "karaoke_aufr33": {
     "type": "mel_band_roformer",
     "config": "configs/config_karaoke_aufr33.yaml",
     "checkpoint": "weights/karaoke_aufr33.ckpt",
-    "stems": [
-      "vocals",
-      "instrumental"
-    ],
-    "description": "Aufr33/Viperx Karaoke - SDR 10.19"
+    "stems": ["karaoke"],
+    "description": "Aufr33 Karaoke - SDR 10.19 (karaoke=instrumental)"
+  },
+  "denoise": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_denoise_mel_band_roformer.yaml",
+    "checkpoint": "weights/denoise.ckpt",
+    "stems": ["dry"],
+    "description": "Remove noise - SDR 27.99 (dry=clean audio)"
+  },
+  "dereverb": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_dereverb_mel_band_roformer.yaml",
+    "checkpoint": "weights/dereverb.ckpt",
+    "stems": ["noreverb"],
+    "description": "Remove reverb - SDR 19.17 (noreverb=dry)"
+  },
+  "drumsep_mdx23c_aufr33": {
+    "type": "mdx23c",
+    "config": "configs/config_drumsep_mdx23c_aufr33.yaml",
+    "checkpoint": "weights/drumsep_mdx23c_aufr33.ckpt",
+    "stems": ["kick", "snare", "toms", "hh", "ride", "crash"],
+    "description": "Drum kit 6-stem (kick/snare/toms/hh/ride/crash)"
+  },
+  "drumsep_mdx23c_jarredou": {
+    "type": "mdx23c",
+    "config": "configs/config_drumsep_mdx23c_jarredou.yaml",
+    "checkpoint": "weights/drumsep_mdx23c_jarredou.ckpt",
+    "stems": ["kick", "snare", "toms", "hh", "cymbals"],
+    "description": "Drum kit 5-stem BEST (kick/snare/toms/hh/cymbals)"
+  },
+  "guitar_becruily": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_guitar_becruily.yaml",
+    "checkpoint": "weights/becruily_guitar.ckpt",
+    "stems": ["Guitar", "Other"],
+    "description": "Guitar isolation - SDR 14.22"
+  },
+  "aspiration": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_aspiration_mel_band_roformer.yaml",
+    "checkpoint": "weights/aspiration.ckpt",
+    "stems": ["no_breath", "breath"],
+    "description": "De-breathe vocals - SDR 18.98"
+  },
+  "chorus_male_female": {
+    "type": "bs_roformer",
+    "config": "configs/config_chorus_male_female_bs_roformer.yaml",
+    "checkpoint": "weights/chorus_male_female.ckpt",
+    "stems": ["male", "female"],
+    "description": "Separate male/female in duets - SDR 24.12"
+  },
+  "bleed_suppressor": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_mel_band_roformer_bleed_suppressor_v1.yaml",
+    "checkpoint": "weights/bleed_suppressor.ckpt",
+    "stems": ["Instrumental"],
+    "description": "Remove vocal bleed from instrumentals"
+  },
+  "crowd": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_crowd.yaml",
+    "checkpoint": "weights/crowd.ckpt",
+    "stems": ["crowd"],
+    "description": "Extract crowd/audience noise - SDR 8.71"
+  },
+  "denoise_debleed": {
+    "type": "mel_band_roformer",
+    "config": "configs/config_mel_band_roformer_instrumental_gabox.yaml",
+    "checkpoint": "weights/denoise_debleed.ckpt",
+    "stems": ["Instrumental"],
+    "description": "Remove noise/bleed from instrumentals (Gabox)"
   }
 }
