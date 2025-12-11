@@ -30,5 +30,4 @@ loralib
 # For spectrograms (optional but used in inference.py)
 matplotlib
 
-# cx_Freeze (specific version that works)
-cx-Freeze==6.15.16
+# Note: cx-Freeze==6.15.16 + setuptools installed separately in build.sh

@@ -2,6 +2,7 @@
 #
 # Build frozen executable for Music Source Separation
 # Uses ONLY inference dependencies (no training deps)
+# Uses uv for fast, reliable package installation
 #
 
 set -e
@@ -14,17 +15,37 @@ echo "============================================================"
 echo "Building Music Source Separation Executable"
 echo "============================================================"
 
-# Create fresh virtual environment
+# Check if uv is available, install if not
+if ! command -v uv &> /dev/null; then
+    echo "Installing uv (fast Python package manager)..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.cargo/bin:$PATH"
+fi
+
+# Create fresh virtual environment with uv
 BUILD_VENV="$SCRIPT_DIR/build_venv"
 rm -rf "$BUILD_VENV"
-echo "Creating clean environment..."
-python3 -m venv "$BUILD_VENV"
+echo "Creating clean environment with uv..."
+uv venv "$BUILD_VENV" --python 3.10
 source "$BUILD_VENV/bin/activate"
-pip install --upgrade pip
 
-# Install ONLY inference dependencies from our minimal requirements
-echo "Installing minimal inference dependencies..."
-pip install -r "$SCRIPT_DIR/requirements_freeze.txt"
+# Install ONLY inference dependencies using uv
+# Force pre-built wheels only to avoid llvmlite/numba compilation issues
+echo "Installing minimal inference dependencies with uv..."
+echo "  (forcing pre-built wheels only)"
+
+# cx-Freeze needs setuptools
+uv pip install "setuptools<70,>=62.6" cx-Freeze==6.15.16
+
+uv pip install --only-binary :all: -r "$SCRIPT_DIR/requirements_freeze.txt" || {
+    echo ""
+    echo "Some packages don't have wheels. Trying with pinned versions..."
+    # These versions have known working wheels
+    uv pip install torch==2.2.2 torchaudio==2.2.2 "numpy<2" scipy soundfile \
+        librosa==0.10.1 llvmlite==0.41.1 numba==0.58.1 \
+        tqdm pyyaml omegaconf ml_collections \
+        einops rotary-embedding-torch beartype loralib matplotlib
+}
 
 # Clean previous build
 rm -rf "$BUILD_DIR"
@@ -42,6 +63,7 @@ echo "Copying project files..."
 cp -r "$PROJECT_DIR/configs" "$BUILD_DIR/"
 cp -r "$PROJECT_DIR/models" "$BUILD_DIR/"
 cp -r "$PROJECT_DIR/utils" "$BUILD_DIR/"
+cp "$SCRIPT_DIR/models.json" "$BUILD_DIR/" 2>/dev/null || true
 mkdir -p "$BUILD_DIR/weights"
 
 # Copy soundfile data

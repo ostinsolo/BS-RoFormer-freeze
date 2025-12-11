@@ -442,7 +442,9 @@ def separate(model, config, audio_path, output_dir, model_info, device="cpu",
     
     for stem in stems_to_save:
         wav = waveforms[stem]
-        path = os.path.join(out_subdir, f"{stem}.{output_format}")
+        # Always use lowercase filenames for consistency
+        stem_filename = stem.lower()
+        path = os.path.join(out_subdir, f"{stem_filename}.{output_format}")
         sf.write(path, wav.T, sample_rate, subtype=subtype)
         print(f"  Saved: {path}")
     
