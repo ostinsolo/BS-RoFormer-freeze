@@ -83,17 +83,18 @@ cp "$PROJECT_DIR/download_models.py" "$BUILD_DIR/" 2>/dev/null || true
 # This prevents thread scheduling conflicts and improves performance by ~34%
 # ============================================================
 echo "Checking for OpenMP library conflicts..."
-if [ -f "$BUILD_DIR/lib/libomp.dylib" ] && [ -f "$BUILD_DIR/lib/libiomp5.dylib" ]; then
-    echo "  Found conflicting OpenMP libraries!"
-    echo "  Removing libomp.dylib (LLVM) - keeping libiomp5.dylib (Intel)"
-    rm -f "$BUILD_DIR/lib/libomp.dylib"
-    echo "  OpenMP conflict resolved."
-elif [ -f "$BUILD_DIR/lib/libomp.dylib" ]; then
-    echo "  Only LLVM OpenMP found (libomp.dylib)"
-elif [ -f "$BUILD_DIR/lib/libiomp5.dylib" ]; then
-    echo "  Only Intel OpenMP found (libiomp5.dylib) - OK"
+# Remove all libomp.dylib (LLVM) - keep only libiomp5.dylib (Intel)
+# This prevents thread scheduling conflicts and improves performance
+REMOVED_COUNT=0
+for omp_file in $(find "$BUILD_DIR" -name "libomp.dylib" 2>/dev/null); do
+    echo "  Removing: $omp_file"
+    rm -f "$omp_file"
+    REMOVED_COUNT=$((REMOVED_COUNT + 1))
+done
+if [ $REMOVED_COUNT -gt 0 ]; then
+    echo "  Removed $REMOVED_COUNT conflicting libomp.dylib files"
 else
-    echo "  No OpenMP libraries found in lib/"
+    echo "  No conflicting libomp.dylib found"
 fi
 
 # Verify OpenMP setup
