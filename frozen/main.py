@@ -317,7 +317,7 @@ def load_model(model_name, models_dir=None):
 def separate(model, config, audio_path, output_dir, model_info, device="cpu", 
               overlap=None, batch_size=None, use_tta=False,
               output_format='wav', pcm_type='FLOAT', extract_instrumental=False,
-              selected_stems=None, two_stems=None):
+              selected_stems=None, two_stems=None, use_fast=False):
     """Separate audio into stems
     
     Args:
@@ -337,7 +337,7 @@ def separate(model, config, audio_path, output_dir, model_info, device="cpu",
         selected_stems: List of stems to output (None = all stems)
         two_stems: Demucs-style mode - output specified stem + 'no_{stem}'
     """
-    from utils.model_utils import demix, apply_tta
+    from utils.model_utils import demix, demix_fast, apply_tta
     
     print(f"\nProcessing: {audio_path}")
     sample_rate = getattr(config.audio, 'sample_rate', 44100)
@@ -358,7 +358,12 @@ def separate(model, config, audio_path, output_dir, model_info, device="cpu",
     
     print("Separating...")
     start = time.time()
-    waveforms = demix(config, model, audio, device, model_type=model_info["type"], pbar=True)
+    
+    # Use fast demix if enabled (vectorized chunking)
+    if use_fast:
+        waveforms = demix_fast(config, model, audio, device, model_type=model_info["type"], pbar=True)
+    else:
+        waveforms = demix(config, model, audio, device, model_type=model_info["type"], pbar=True)
     
     # Apply TTA if requested
     if use_tta:
@@ -483,9 +488,9 @@ Examples:
 
 Quality/Performance Tuning:
   --overlap N    Overlap factor. Higher = better quality, slower processing.
-                 2 = 50%% overlap (fast)
-                 4 = 75%% overlap (balanced) 
-                 8 = 87.5%% overlap (high quality)
+                 1 = no overlap (fastest, default)
+                 2 = 50%% overlap (balanced)
+                 4 = 75%% overlap (high quality)
   
   --batch-size N Chunks processed at once. Higher = faster but more VRAM.
                  1 = low VRAM (default for most models)
@@ -542,15 +547,19 @@ Custom Models:
                         help="Initialize models.json with default models")
     
     # Quality/Performance tuning
-    parser.add_argument("--overlap", type=int, default=None,
-                        help="Overlap factor (2=50%%, 4=75%%, 8=87.5%%). Higher=better quality, slower. Default from config.")
+    parser.add_argument("--overlap", type=int, default=1,
+                        help="Overlap factor (1=none/fastest, 2=50%%, 4=75%%). Default: 1 (no overlap, fastest).")
     parser.add_argument("--batch-size", type=int, default=None,
                         help="Batch size for inference (affects VRAM). Default from config.")
     parser.add_argument("--use-tta", action="store_true",
                         help="Enable test-time augmentation (3x slower but better quality)")
+    parser.add_argument("--fast", action="store_true",
+                        help="Use optimized vectorized chunking (faster with --overlap 2+, experimental)")
     parser.add_argument("--threads", type=int, default=0,
                         help="Number of CPU threads (0=auto-detect physical cores). "
                              "Recommended: leave at 0 or set to number of physical cores.")
+    parser.add_argument("--precision", type=str, choices=['high', 'medium'], default='high',
+                        help="CPU matmul precision: 'high' (default, best quality) or 'medium' (faster, ~10%% speedup)")
     
     # Output format options
     parser.add_argument("--flac", action="store_true",
@@ -567,6 +576,15 @@ Custom Models:
                              "(e.g., '--two-stems bass' outputs bass.wav + no_bass.wav). "
                              "Works with any multi-stem model.")
     
+    # Ensemble Options
+    parser.add_argument("--ensemble", 
+                        help="List of models to ensemble, comma-separated (e.g. 'vocals_melband,vocals_bsroformer_viperx')")
+    parser.add_argument("--ensemble-type", default="avg_wave",
+                        choices=["avg_wave", "median_wave", "min_wave", "max_wave", "avg_fft", "median_fft", "min_fft", "max_fft"],
+                        help="Ensemble algorithm (default: avg_wave)")
+    parser.add_argument("--ensemble-weights", 
+                        help="Weights for ensemble, comma-separated (e.g. '1.0,0.8'). Default: equal weights.")
+
     args = parser.parse_args()
     
     # Set thread count (do this early, before any heavy computation)
@@ -579,9 +597,19 @@ Custom Models:
         print(f"Using {num_threads} threads (user-specified)")
     
     torch.set_num_threads(num_threads)
-    torch.set_num_interop_threads(num_threads)
+    torch.set_num_interop_threads(max(2, num_threads // 2))  # Half threads for inter-op
+    
+    # Intel CPU/OpenMP/BLAS optimizations for maximum parallelization
     os.environ['OMP_NUM_THREADS'] = str(num_threads)
     os.environ['MKL_NUM_THREADS'] = str(num_threads)
+    os.environ['OPENBLAS_NUM_THREADS'] = str(num_threads)
+    os.environ['KMP_AFFINITY'] = 'granularity=fine,compact,1,0'  # Thread pinning
+    os.environ['KMP_BLOCKTIME'] = '0'  # Immediate thread release
+    
+    # CPU matmul precision (optional: trade precision for speed)
+    if hasattr(torch, 'set_float32_matmul_precision') and args.precision == 'medium':
+        torch.set_float32_matmul_precision('medium')
+        print(f"Using medium precision matmul (faster, ~10% speedup)")
     
     # Initialize registry if requested
     if args.init_registry:
@@ -602,12 +630,8 @@ Custom Models:
     if not os.path.exists(args.input):
         print(f"Error: Input not found: {args.input}")
         sys.exit(1)
-    
-    # Load model
-    model, config, model_info = load_model(args.model, args.models_dir)
-    model = model.to(args.device)
-    
-    # Get input files
+        
+    # Get input files (common for both modes)
     if os.path.isfile(args.input):
         files = [args.input]
     else:
@@ -617,6 +641,138 @@ Custom Models:
     if not files:
         print("Error: No audio files found")
         sys.exit(1)
+
+    output_format = 'flac' if args.flac else 'wav'
+    
+    # Parse stems selection
+    selected_stems = None
+    if args.stems:
+        selected_stems = [s.strip().lower() for s in args.stems.split(',')]
+        print(f"Selected stems: {', '.join(selected_stems)}")
+
+    # ==========================================
+    # ENSEMBLE MODE
+    # ==========================================
+    if args.ensemble:
+        from utils.ensemble import average_waveforms
+        import shutil
+        import tempfile
+        
+        models = [m.strip() for m in args.ensemble.split(',')]
+        weights = [float(w) for w in args.ensemble_weights.split(',')] if args.ensemble_weights else [1.0] * len(models)
+        
+        if len(weights) != len(models):
+            print("Error: Number of weights must match number of models")
+            sys.exit(1)
+            
+        print(f"\n=== Running Ensemble Mode ===")
+        print(f"Models: {', '.join(models)}")
+        print(f"Algorithm: {args.ensemble_type}")
+        print(f"Weights: {weights}")
+        print(f"Input: {len(files)} file(s)")
+        
+        base_temp_dir = tempfile.mkdtemp(prefix="mss_ensemble_")
+        print(f"Temp dir: {base_temp_dir}")
+        
+        try:
+            total_time = 0
+            
+            # 1. Run separation for each model
+            for i, model_name in enumerate(models):
+                print(f"\n--- [Model {i+1}/{len(models)}] {model_name} ---")
+                model_out_dir = os.path.join(base_temp_dir, model_name)
+                
+                try:
+                    model, config, model_info = load_model(model_name, args.models_dir)
+                    model = model.to(args.device)
+                    
+                    for f in files:
+                        # Use WAV/FLOAT for intermediate results to preserve quality
+                        elapsed = separate(
+                            model, config, f, model_out_dir, model_info, args.device,
+                            overlap=args.overlap,
+                            batch_size=args.batch_size,
+                            use_tta=args.use_tta,
+                            output_format='wav',
+                            pcm_type='FLOAT',
+                            extract_instrumental=args.extract_instrumental,
+                            selected_stems=selected_stems,
+                            two_stems=args.two_stems,
+                            use_fast=args.fast
+                        )
+                        total_time += elapsed
+                    
+                    # Free memory
+                    del model
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                        torch.mps.empty_cache()
+                        
+                except Exception as e:
+                    print(f"Error processing model {model_name}: {e}")
+                    raise e
+
+            # 2. Average results
+            print("\n--- Merging Ensemble Results ---")
+            
+            for f in files:
+                basename = os.path.splitext(os.path.basename(f))[0]
+                final_out_subdir = os.path.join(args.output, basename)
+                os.makedirs(final_out_subdir, exist_ok=True)
+                
+                # Determine stems from first successful model output
+                first_model_dir = os.path.join(base_temp_dir, models[0], basename)
+                if not os.path.exists(first_model_dir):
+                    print(f"Warning: No output found for {basename}")
+                    continue
+                    
+                stems = [f.replace('.wav', '') for f in os.listdir(first_model_dir) if f.endswith('.wav')]
+                
+                for stem in stems:
+                    print(f"  Ensembling stem: {stem}...")
+                    waveforms = []
+                    valid_weights = []
+                    
+                    for i, model_name in enumerate(models):
+                        stem_path = os.path.join(base_temp_dir, model_name, basename, f"{stem}.wav")
+                        if os.path.exists(stem_path):
+                            wav, sr = librosa.load(stem_path, sr=None, mono=False)
+                            if len(wav.shape) == 1: 
+                                wav = np.stack([wav, wav], axis=0)
+                            waveforms.append(wav)
+                            valid_weights.append(weights[i])
+                        else:
+                            print(f"    Warning: Stem {stem} missing from {model_name}")
+                            
+                    if waveforms:
+                        # Ensure shapes match (min length)
+                        min_len = min(w.shape[1] for w in waveforms)
+                        waveforms = [w[:, :min_len] for w in waveforms]
+                        
+                        # Average
+                        merged_wav = average_waveforms(np.array(waveforms), valid_weights, args.ensemble_type)
+                        
+                        # Save final result
+                        out_path = os.path.join(final_out_subdir, f"{stem}.{output_format}")
+                        sf.write(out_path, merged_wav.T, sr, subtype=args.pcm_type if not args.flac else None)
+                        print(f"    Saved: {out_path}")
+            
+            print(f"\nEnsemble complete! Total processing time: {total_time:.2f}s")
+            
+        finally:
+            print(f"Cleaning up temp dir: {base_temp_dir}")
+            shutil.rmtree(base_temp_dir, ignore_errors=True)
+            
+        return
+
+    # ==========================================
+    # SINGLE MODEL MODE
+    # ==========================================
+    
+    # Load model
+    model, config, model_info = load_model(args.model, args.models_dir)
+    model = model.to(args.device)
     
     os.makedirs(args.output, exist_ok=True)
     
@@ -628,18 +784,11 @@ Custom Models:
     if args.use_tta:
         print("TTA: enabled (will take ~3x longer)")
     
-    output_format = 'flac' if args.flac else 'wav'
     print(f"Output format: {output_format.upper()} ({args.pcm_type})")
     if args.extract_instrumental:
         print("Extract instrumental: enabled")
     if args.two_stems:
         print(f"Two-stems mode: {args.two_stems} + no_{args.two_stems.lower()}")
-    
-    # Parse stems selection
-    selected_stems = None
-    if args.stems:
-        selected_stems = [s.strip().lower() for s in args.stems.split(',')]
-        print(f"Selected stems: {', '.join(selected_stems)}")
     
     total_time = 0
     
@@ -653,7 +802,8 @@ Custom Models:
             pcm_type=args.pcm_type,
             extract_instrumental=args.extract_instrumental,
             selected_stems=selected_stems,
-            two_stems=args.two_stems
+            two_stems=args.two_stems,
+            use_fast=args.fast
         )
         total_time += elapsed
     

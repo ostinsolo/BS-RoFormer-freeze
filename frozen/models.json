@@ -167,6 +167,13 @@
     "stems": ["aspiration", "other"],
     "description": "De-breathe vocals - SDR 18.98 (aspiration=breaths)"
   },
+  "apollo": {
+    "type": "apollo",
+    "config": "configs/config_apollo.yaml",
+    "checkpoint": "weights/apollo.ckpt",
+    "stems": ["restored", "addition"],
+    "description": "Vocal Restoration/Enhancement (Lew v2)"
+  },
   "chorus_male_female": {
     "type": "bs_roformer",
     "config": "configs/config_chorus_male_female_bs_roformer.yaml",
