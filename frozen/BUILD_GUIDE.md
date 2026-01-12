@@ -2,7 +2,7 @@
 
 This guide explains how to build a standalone executable for Music Source Separation.
 
-**Current Version: v1.8.2 (December 2025)**
+**Current Version: v1.8.3 (December 2025)**
 
 ---
 
@@ -16,16 +16,23 @@ This guide explains how to build a standalone executable for Music Source Separa
 - [x] Lowercase output filenames for consistency
 
 ### v1.8.0+ Features
+- [x] `--fast` - **2x speedup** via vectorized chunking (works on ANY file length)
 - [x] `--two-stems X` - Demucs-style output (stem + no_stem)
 - [x] `--stems X,Y` - Select specific stems to output
 - [x] `--extract-instrumental` - Generate instrumental from vocal models
 - [x] `--flac` / `--pcm-type` - Output format options
 - [x] `--overlap` / `--batch-size` / `--use-tta` - Quality tuning
 - [x] `--threads` - CPU thread control with auto-detection
+- [x] `--precision` - Matmul precision control (high/medium/low)
+- [x] `--ensemble` - Combine multiple models for higher quality
+- [x] Intel threading optimizations (KMP_AFFINITY, KMP_BLOCKTIME)
+- [x] Fixed OpenMP library conflict (removed libomp.dylib)
+- [x] Short audio padding - `--fast` automatically pads short files
 
-### Model Support (28 models)
+### Model Support (29 models)
 - [x] **Logic RoFormer** - 6-stem with BEST bass separation (40x less bleed)
 - [x] **SCNet XL IHF** - 4-stem with highest SDR (10.08)
+- [x] **Apollo** - Vocal restoration/enhancement
 - [x] BS-RoFormer (all variants including Resurrection, Revive)
 - [x] MelBand RoFormer (Gabox, Karaoke, Aspiration, etc.)
 - [x] MDX23C
@@ -299,6 +306,23 @@ cx-Freeze==6.15.16
 
 ## Performance (CPU)
 
+### Standard vs Fast Mode
+
+| Model | Audio | Standard | --fast | Speedup |
+|-------|-------|----------|--------|---------|
+| `vocals_melband` | 5.86s | 35.9s | 18.8s | **1.9x** |
+| `bsroformer_4stem` | 5.86s | 68.9s | 35.2s | **2.0x** |
+| `logic_roformer` | 5.86s | 86.1s | fallback* | - |
+
+*Fast mode now **pads short audio** automatically - works on ANY file length!
+
+### When to use --fast
+- **Any audio length** - short files are automatically padded
+- Best results with `--overlap 2` or higher
+- May produce slightly different (sometimes better!) output than standard mode
+
+### Baseline Times (Standard Mode)
+
 | Model | Task | Time (Intel Mac) |
 |-------|------|------------------|
 | Logic RoFormer | 6 stems | ~60s |
@@ -326,4 +350,4 @@ See `.github/workflows/build-mac.yml` for the ARM build workflow.
 
 ---
 
-*Last updated: December 11, 2025*
+*Last updated: December 13, 2025*

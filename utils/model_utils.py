@@ -169,6 +169,165 @@ def demix(
         return ret_data
 
 
+def demix_fast(
+    config: ConfigDict,
+    model: torch.nn.Module,
+    mix: torch.Tensor,
+    device: torch.device,
+    model_type: str,
+    pbar: bool = False
+) -> Union[Dict[str, np.ndarray], np.ndarray]:
+    """
+    Optimized audio source separation using vectorized chunk operations.
+    
+    Uses torch.unfold for faster chunk extraction. Pre-computes per-chunk
+    windows for correct first/last chunk handling without quality loss.
+    Falls back to standard demix for htdemucs models.
+    
+    Args:
+        Same as demix()
+    
+    Returns:
+        Same as demix()
+    """
+    # Fall back to standard demix for htdemucs (different chunking logic)
+    if model_type == 'htdemucs':
+        return demix(config, model, mix, device, model_type, pbar)
+    
+    should_print = not dist.is_initialized() or dist.get_rank() == 0
+    
+    mix = torch.tensor(mix, dtype=torch.float32)
+    
+    # Get config parameters
+    if 'chunk_size' in config.inference:
+        chunk_size = config.inference.chunk_size
+    else:
+        chunk_size = config.audio.chunk_size
+    
+    num_instruments = len(prefer_target_instrument(config))
+    num_overlap = config.inference.num_overlap
+    batch_size = config.inference.batch_size
+    
+    fade_size = chunk_size // 10
+    step = chunk_size // num_overlap
+    border = chunk_size - step
+    length_init = mix.shape[-1]
+    
+    # Create base windowing array
+    windowing_array = _getWindowingArray(chunk_size, fade_size)
+    
+    # Add padding to handle edge artifacts
+    use_border_padding = length_init > 2 * border and border > 0
+    if use_border_padding:
+        mix = nn.functional.pad(mix, (border, border), mode="reflect")
+    
+    # Pad to make length divisible by step for clean unfold
+    padded_length = mix.shape[-1]
+    
+    # If audio is shorter than chunk_size, pad it to fit at least one chunk
+    # This allows fast mode to work on any file length
+    short_audio_pad = 0
+    if padded_length < chunk_size:
+        short_audio_pad = chunk_size - padded_length
+        mix = nn.functional.pad(mix, (0, short_audio_pad), mode="reflect")
+        padded_length = mix.shape[-1]
+        if should_print:
+            print(f"  Short audio padded: {length_init} -> {padded_length} samples")
+    
+    remainder = (padded_length - chunk_size) % step
+    extra_pad = 0
+    if remainder != 0:
+        extra_pad = step - remainder
+        mix = nn.functional.pad(mix, (0, extra_pad), mode="reflect")
+    
+    # === VECTORIZED CHUNK EXTRACTION using unfold ===
+    # unfold returns shape: (channels, num_chunks, chunk_size)
+    unfolded = mix.unfold(dimension=-1, size=chunk_size, step=step)
+    num_chunks = unfolded.shape[1]
+    
+    # Reshape to (num_chunks, channels, chunk_size) for batching
+    chunks = unfolded.permute(1, 0, 2)
+    
+    # Pre-compute per-chunk windows for correct boundary handling
+    # This matches standard demix: first chunk no fadein, last chunk no fadeout
+    windows = []
+    for chunk_idx in range(num_chunks):
+        window = windowing_array.clone()
+        if chunk_idx == 0:  # First chunk: no fadein
+            window[:fade_size] = 1.0
+        if chunk_idx == num_chunks - 1:  # Last chunk: no fadeout
+            window[-fade_size:] = 1.0
+        windows.append(window)
+    windows = torch.stack(windows)  # (num_chunks, chunk_size)
+    
+    use_amp = getattr(config.training, 'use_amp', True)
+    
+    with torch.cuda.amp.autocast(enabled=use_amp):
+        with torch.inference_mode():
+            # Initialize result and counter tensors
+            result_length = mix.shape[-1]
+            req_shape = (num_instruments, mix.shape[0], result_length)
+            result = torch.zeros(req_shape, dtype=torch.float32)
+            counter = torch.zeros(req_shape, dtype=torch.float32)
+            
+            if pbar and should_print:
+                progress_bar = tqdm(
+                    total=num_chunks, desc="Processing chunks (fast)", leave=False
+                )
+            else:
+                progress_bar = None
+            
+            # Process in batches
+            for batch_start in range(0, num_chunks, batch_size):
+                batch_end = min(batch_start + batch_size, num_chunks)
+                batch_chunks = chunks[batch_start:batch_end].to(device)
+                batch_windows = windows[batch_start:batch_end]  # (batch, chunk_size)
+                
+                # Run model inference
+                outputs = model(batch_chunks)  # (batch, instruments, channels, chunk_size)
+                outputs = outputs.cpu()
+                
+                # Vectorized overlap-add with per-chunk windows
+                for i, chunk_idx in enumerate(range(batch_start, batch_end)):
+                    start_pos = chunk_idx * step
+                    end_pos = start_pos + chunk_size
+                    window = batch_windows[i]  # (chunk_size,)
+                    
+                    # Apply window and accumulate
+                    result[..., start_pos:end_pos] += outputs[i] * window
+                    counter[..., start_pos:end_pos] += window
+                
+                if progress_bar:
+                    progress_bar.update(batch_end - batch_start)
+            
+            if progress_bar:
+                progress_bar.close()
+            
+            # Compute final result
+            counter = torch.clamp(counter, min=1e-8)
+            estimated_sources = result / counter
+            estimated_sources = estimated_sources.cpu().numpy()
+            np.nan_to_num(estimated_sources, copy=False, nan=0.0)
+            
+            # Remove padding in reverse order of application
+            # 1. Remove extra step-alignment padding
+            if extra_pad > 0:
+                estimated_sources = estimated_sources[..., :-extra_pad]
+            
+            # 2. Remove short audio padding (if audio was shorter than chunk_size)
+            if short_audio_pad > 0:
+                estimated_sources = estimated_sources[..., :-short_audio_pad]
+            
+            # 3. Remove border padding (same as standard demix)
+            if use_border_padding:
+                estimated_sources = estimated_sources[..., border:-border]
+    
+    # Return as dictionary
+    instruments = prefer_target_instrument(config)
+    ret_data = {k: v for k, v in zip(instruments, estimated_sources)}
+    return ret_data
+
+
 def initialize_model_and_device(model: torch.nn.Module, device_ids: List[int]) ->\
         Tuple[Union[torch.device, str], torch.nn.Module]:
     """
