@@ -535,6 +535,10 @@ class MelBandRoformer(Module):
         d - feature dimension
         """
 
+        # MPS (Apple Silicon GPU) support - detect and handle CPU fallback for unsupported ops
+        original_device = raw_audio.device
+        x_is_mps = True if original_device.type == "mps" else False
+        
         device = raw_audio.device
 
         if raw_audio.ndim == 2:
@@ -553,7 +557,16 @@ class MelBandRoformer(Module):
 
         stft_window = self.stft_window_fn(device=device)
 
-        stft_repr = torch.stft(raw_audio, **self.stft_kwargs, window=stft_window, return_complex=True)
+        # MPS: perform STFT on CPU if MPS FFT not supported
+        try:
+            stft_repr = torch.stft(raw_audio, **self.stft_kwargs, window=stft_window, return_complex=True)
+        except:
+            stft_repr = torch.stft(
+                raw_audio.cpu() if x_is_mps else raw_audio, 
+                **self.stft_kwargs, 
+                window=stft_window.cpu() if x_is_mps else stft_window, 
+                return_complex=True
+            ).to(device)
         stft_repr = torch.view_as_real(stft_repr)
 
         stft_repr = unpack_one(stft_repr, batch_audio_channel_packed_shape, '* f t c')
@@ -565,9 +578,9 @@ class MelBandRoformer(Module):
 
         batch_arange = torch.arange(batch, device=device)[..., None]
 
-        # account for stereo
+        # account for stereo - handle MPS by using CPU indices
 
-        x = stft_repr[batch_arange, self.freq_indices]
+        x = stft_repr[batch_arange, self.freq_indices.cpu() if x_is_mps else self.freq_indices]
 
         # fold the complex (real and imag) into the frequencies dimension
 
@@ -634,26 +647,40 @@ class MelBandRoformer(Module):
         stft_repr = rearrange(stft_repr, 'b f t c -> b 1 f t c')
 
         # complex number multiplication
+        # MPS: ComplexFloat not fully supported, do these ops on CPU
 
-        stft_repr = torch.view_as_complex(stft_repr)
-        masks = torch.view_as_complex(masks)
-
-        masks = masks.type(stft_repr.dtype)
-
-        # need to average the estimated mask for the overlapped frequencies
-
-        scatter_indices = repeat(self.freq_indices, 'f -> b n f t', b=batch, n=num_stems, t=stft_repr.shape[-1])
-
-        stft_repr_expanded_stems = repeat(stft_repr, 'b 1 ... -> b n ...', n=num_stems)
-        masks_summed = torch.zeros_like(stft_repr_expanded_stems).scatter_add_(2, scatter_indices, masks)
-
-        denom = repeat(self.num_bands_per_freq, 'f -> (f r) 1', r=channels)
-
-        masks_averaged = masks_summed / denom.clamp(min=1e-8)
-
-        # modulate stft repr with estimated mask
-
-        stft_repr = stft_repr * masks_averaged
+        if x_is_mps:
+            stft_repr_cpu = stft_repr.cpu()
+            masks_cpu = masks.cpu()
+            stft_repr_complex = torch.view_as_complex(stft_repr_cpu)
+            masks_complex = torch.view_as_complex(masks_cpu)
+            masks_complex = masks_complex.type(stft_repr_complex.dtype)
+            
+            # scatter_add_ on CPU
+            scatter_indices = repeat(self.freq_indices.cpu(), 'f -> b n f t', b=batch, n=num_stems, t=stft_repr_complex.shape[-1])
+            stft_repr_expanded_stems = repeat(stft_repr_complex, 'b 1 ... -> b n ...', n=num_stems)
+            masks_summed = torch.zeros_like(stft_repr_expanded_stems).scatter_add_(2, scatter_indices, masks_complex)
+            
+            denom = repeat(self.num_bands_per_freq.cpu(), 'f -> (f r) 1', r=channels)
+            masks_averaged = masks_summed / denom.clamp(min=1e-8)
+            
+            # modulate stft repr with estimated mask
+            stft_repr = (stft_repr_complex * masks_averaged).to(device)
+        else:
+            stft_repr = torch.view_as_complex(stft_repr)
+            masks = torch.view_as_complex(masks)
+            masks = masks.type(stft_repr.dtype)
+            
+            # need to average the estimated mask for the overlapped frequencies
+            scatter_indices = repeat(self.freq_indices, 'f -> b n f t', b=batch, n=num_stems, t=stft_repr.shape[-1])
+            stft_repr_expanded_stems = repeat(stft_repr, 'b 1 ... -> b n ...', n=num_stems)
+            masks_summed = torch.zeros_like(stft_repr_expanded_stems).scatter_add_(2, scatter_indices, masks)
+            
+            denom = repeat(self.num_bands_per_freq, 'f -> (f r) 1', r=channels)
+            masks_averaged = masks_summed / denom.clamp(min=1e-8)
+            
+            # modulate stft repr with estimated mask
+            stft_repr = stft_repr * masks_averaged
 
         # istft
 
@@ -661,10 +688,30 @@ class MelBandRoformer(Module):
 
         if self.zero_dc:
             # whether to dc filter
-            stft_repr = stft_repr.index_fill(1, tensor(0, device = device), 0.)
+            # MPS: complex index_fill not supported, do on CPU
+            if x_is_mps:
+                stft_repr = stft_repr.cpu().index_fill(1, tensor(0, device='cpu'), 0.)
+            else:
+                stft_repr = stft_repr.index_fill(1, tensor(0, device=device), 0.)
 
-        recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window=stft_window, return_complex=False,
-                                  length=istft_length)
+        # MPS: perform istft on CPU since FFT ops may not be fully supported
+        try:
+            recon_audio = torch.istft(
+                stft_repr.cpu() if x_is_mps else stft_repr, 
+                **self.stft_kwargs, 
+                window=stft_window.cpu() if x_is_mps else stft_window, 
+                return_complex=False,
+                length=istft_length
+            )
+        except:
+            # Fallback for older PyTorch or MPS issues
+            recon_audio = torch.istft(
+                stft_repr.cpu(), 
+                **self.stft_kwargs, 
+                window=stft_window.cpu(), 
+                return_complex=False,
+                length=istft_length
+            )
 
         recon_audio = rearrange(recon_audio, '(b n s) t -> b n s t', b=batch, s=self.audio_channels, n=num_stems)
 
@@ -674,6 +721,9 @@ class MelBandRoformer(Module):
         # if a target is passed in, calculate loss for learning
 
         if not exists(target):
+            # MPS: move result back to original device
+            if x_is_mps:
+                recon_audio = recon_audio.to(original_device)
             return recon_audio
 
         if self.num_stems > 1:
@@ -706,7 +756,14 @@ class MelBandRoformer(Module):
 
         total_loss = loss + weighted_multi_resolution_loss
 
+        # MPS: move loss back to original device
+        if x_is_mps:
+            total_loss = total_loss.to(original_device)
+
         if not return_loss_breakdown:
             return total_loss
 
+        # MPS: move loss components back to original device
+        if x_is_mps:
+            return total_loss, (loss.to(original_device), multi_stft_resolution_loss.to(original_device))
         return total_loss, (loss, multi_stft_resolution_loss)
