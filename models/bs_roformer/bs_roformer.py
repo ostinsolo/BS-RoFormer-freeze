@@ -623,21 +623,25 @@ class BSRoformer(Module):
         stft_repr = rearrange(stft_repr, 'b f t c -> b 1 f t c')
 
         # complex number multiplication
-
-        stft_repr = torch.view_as_complex(stft_repr)
-        mask = torch.view_as_complex(mask)
-
-        stft_repr = stft_repr * mask
-
-        # istft
-
-        stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s=self.audio_channels)
-
-        # same as torch.stft() fix for MacOS MPS above
-        try:
-            recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window=stft_window, return_complex=False, length=raw_audio.shape[-1])
-        except:
-            recon_audio = torch.istft(stft_repr.cpu() if x_is_mps else stft_repr, **self.stft_kwargs, window=stft_window.cpu() if x_is_mps else stft_window, return_complex=False, length=raw_audio.shape[-1]).to(device)
+        # MPS: Move to CPU for complex operations that don't support ComplexFloat on MPS
+        if x_is_mps:
+            stft_repr = torch.view_as_complex(stft_repr.cpu())
+            mask = torch.view_as_complex(mask.cpu())
+            stft_repr = stft_repr * mask
+            # rearrange on CPU (einops doesn't support ComplexFloat on MPS)
+            stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s=self.audio_channels)
+            # istft on CPU
+            recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window=stft_window.cpu(), return_complex=False, length=raw_audio.shape[-1]).to(device)
+        else:
+            stft_repr = torch.view_as_complex(stft_repr)
+            mask = torch.view_as_complex(mask)
+            stft_repr = stft_repr * mask
+            # istft
+            stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s=self.audio_channels)
+            try:
+                recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window=stft_window, return_complex=False, length=raw_audio.shape[-1])
+            except:
+                recon_audio = torch.istft(stft_repr.cpu(), **self.stft_kwargs, window=stft_window.cpu(), return_complex=False, length=raw_audio.shape[-1]).to(device)
 
         recon_audio = rearrange(recon_audio, '(b n s) t -> b n s t', s=self.audio_channels, n=num_stems)
 
