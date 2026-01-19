@@ -685,25 +685,30 @@ class BSConformer(Module):
         mask = rearrange(mask, 'b n t (f c) -> b n f t c', c = 2)
 
         # modulate complex STFT with masks
+        # MPS: Move to CPU for complex operations that don't support ComplexFloat on MPS
         stft_repr = rearrange(stft_repr, 'b f t c -> b 1 f t c')
-        stft_repr = torch.view_as_complex(stft_repr)
-        mask = torch.view_as_complex(mask)
-        stft_repr = stft_repr * mask
-
-        # iSTFT
-        stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s = self.audio_channels)
-
-        if self.zero_dc:
-            stft_repr = stft_repr.index_fill(1, tensor(0, device = device), 0.)
-
-        try:
-            recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window = stft_window, return_complex = False, length = raw_audio.shape[-1])
-        except:
-            recon_audio = torch.istft(stft_repr.cpu() if x_is_mps else stft_repr,
-                                      **self.stft_kwargs,
-                                      window = stft_window.cpu() if x_is_mps else stft_window,
-                                      return_complex = False,
-                                      length = raw_audio.shape[-1]).to(device)
+        if x_is_mps:
+            stft_repr = torch.view_as_complex(stft_repr.cpu())
+            mask = torch.view_as_complex(mask.cpu())
+            stft_repr = stft_repr * mask
+            # rearrange on CPU (einops doesn't support ComplexFloat on MPS)
+            stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s = self.audio_channels)
+            if self.zero_dc:
+                stft_repr = stft_repr.index_fill(1, tensor(0, device = 'cpu'), 0.)
+            # istft on CPU
+            recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window = stft_window.cpu(), return_complex = False, length = raw_audio.shape[-1]).to(device)
+        else:
+            stft_repr = torch.view_as_complex(stft_repr)
+            mask = torch.view_as_complex(mask)
+            stft_repr = stft_repr * mask
+            # iSTFT
+            stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s = self.audio_channels)
+            if self.zero_dc:
+                stft_repr = stft_repr.index_fill(1, tensor(0, device = device), 0.)
+            try:
+                recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window = stft_window, return_complex = False, length = raw_audio.shape[-1])
+            except:
+                recon_audio = torch.istft(stft_repr.cpu(), **self.stft_kwargs, window = stft_window.cpu(), return_complex = False, length = raw_audio.shape[-1]).to(device)
 
         recon_audio = rearrange(recon_audio, '(b n s) t -> b n s t', s = self.audio_channels, n = num_stems)
         if num_stems == 1:

@@ -9,8 +9,16 @@ class STFT:
         self.hop_length = config.hop_length
         self.window = torch.hann_window(window_length=self.n_fft, periodic=True)
         self.dim_f = config.dim_f
+        self.device = None  # Store device for MPS workaround
 
     def __call__(self, x):
+        # MPS workaround: move to CPU for STFT operations
+        x_is_mps = x.device.type == "mps"
+        original_device = x.device
+        if x_is_mps:
+            x = x.cpu()
+            self.device = original_device
+        
         window = self.window.to(x.device)
         batch_dims = x.shape[:-2]
         c, t = x.shape[-2:]
@@ -26,9 +34,19 @@ class STFT:
         x = torch.view_as_real(x)
         x = x.permute([0, 3, 1, 2])
         x = x.reshape([*batch_dims, c, 2, -1, x.shape[-1]]).reshape([*batch_dims, c * 2, -1, x.shape[-1]])
+        
+        if x_is_mps:
+            x = x.to(original_device)
+        
         return x[..., :self.dim_f, :]
 
     def inverse(self, x):
+        # MPS workaround: move to CPU for iSTFT operations
+        x_is_mps = x.device.type == "mps"
+        original_device = x.device
+        if x_is_mps:
+            x = x.cpu()
+        
         window = self.window.to(x.device)
         batch_dims = x.shape[:-3]
         c, f, t = x.shape[-3:]
@@ -40,6 +58,10 @@ class STFT:
         x = x[..., 0] + x[..., 1] * 1.j
         x = torch.istft(x, n_fft=self.n_fft, hop_length=self.hop_length, window=window, center=True)
         x = x.reshape([*batch_dims, 2, -1])
+        
+        if x_is_mps:
+            x = x.to(original_device)
+        
         return x
 
 
