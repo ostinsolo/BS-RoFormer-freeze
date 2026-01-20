@@ -325,6 +325,9 @@ class SCNet(nn.Module):
     def forward(self, x):
         # B, C, L = x.shape
         B = x.shape[0]
+        device = x.device
+        x_is_mps = device.type == "mps"
+        
         # In the initial padding, ensure that the number of frames after the STFT (the length of the T dimension) is even,
         # so that the RFFT operation can be used in the separation network.
         padding = self.hop_length - x.shape[-1] % self.hop_length
@@ -332,10 +335,14 @@ class SCNet(nn.Module):
             padding += self.hop_length
         x = F.pad(x, (0, padding))
 
-        # STFT
+        # STFT - PyTorch 2.5+ supports MPS, fallback to CPU for older versions
         L = x.shape[-1]
         x = x.reshape(-1, L)
-        x = torch.stft(x, **self.stft_config, return_complex=True)
+        try:
+            x = torch.stft(x, **self.stft_config, return_complex=True)
+        except Exception:
+            # Fallback for older PyTorch on MPS
+            x = torch.stft(x.cpu(), **self.stft_config, return_complex=True).to(device)
         x = torch.view_as_real(x)
         x = x.permute(0, 3, 1, 2).reshape(x.shape[0] // self.audio_channels, x.shape[3] * self.audio_channels,
                                           x.shape[1], x.shape[2])
@@ -365,7 +372,13 @@ class SCNet(nn.Module):
         x = x.view(B, n, -1, Fr, T)
         x = x.reshape(-1, 2, Fr, T).permute(0, 2, 3, 1)
         x = torch.view_as_complex(x.contiguous())
-        x = torch.istft(x, **self.stft_config)
+        
+        # ISTFT - PyTorch 2.5+ supports MPS, fallback to CPU for older versions
+        try:
+            x = torch.istft(x, **self.stft_config)
+        except Exception:
+            # Fallback for older PyTorch on MPS
+            x = torch.istft(x.cpu(), **self.stft_config).to(device)
         x = x.reshape(B, len(self.sources), self.audio_channels, -1)
 
         x = x[:, :, :, :-padding]
