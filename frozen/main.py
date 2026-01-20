@@ -12,6 +12,40 @@ import time
 import glob
 import json
 
+# ============================================================================
+# CRITICAL: Monkey-patch inspect module BEFORE importing torch
+# PyTorch 2.9.x's torch.compiler uses inspect.getsource() on import,
+# which fails in frozen executables created with cx_Freeze.
+# ============================================================================
+if getattr(sys, 'frozen', False):
+    import inspect
+    _original_getsourcelines = inspect.getsourcelines
+    _original_getsource = inspect.getsource
+    _original_findsource = inspect.findsource
+    
+    def _safe_getsourcelines(obj, *args, **kwargs):
+        try:
+            return _original_getsourcelines(obj, *args, **kwargs)
+        except OSError:
+            return (["# Source not available in frozen executable\n"], 0)
+    
+    def _safe_getsource(obj, *args, **kwargs):
+        try:
+            return _original_getsource(obj, *args, **kwargs)
+        except OSError:
+            return "# Source not available in frozen executable\n"
+    
+    def _safe_findsource(obj, *args, **kwargs):
+        try:
+            return _original_findsource(obj, *args, **kwargs)
+        except OSError:
+            return (["# Source not available in frozen executable\n"], 0)
+    
+    inspect.getsourcelines = _safe_getsourcelines
+    inspect.getsource = _safe_getsource
+    inspect.findsource = _safe_findsource
+# ============================================================================
+
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
