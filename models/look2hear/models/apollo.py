@@ -268,9 +268,19 @@ class Apollo(BaseModel):
     def spec_band_split(self, input):
 
         B, nch, nsample = input.shape
-
-        spec = torch.stft(input.view(B * nch, nsample), n_fft=self.win, hop_length=self.stride,
-                          window=torch.hann_window(self.win).to(input.device), return_complex=True)
+        device = input.device
+        x_is_mps = device.type == "mps"
+        
+        # STFT - PyTorch 2.5+ supports MPS, fallback to CPU for older versions
+        window = torch.hann_window(self.win).to(device)
+        input_flat = input.view(B * nch, nsample)
+        try:
+            spec = torch.stft(input_flat, n_fft=self.win, hop_length=self.stride,
+                              window=window, return_complex=True)
+        except Exception:
+            # Fallback for older PyTorch on MPS
+            spec = torch.stft(input_flat.cpu(), n_fft=self.win, hop_length=self.stride,
+                              window=window.cpu(), return_complex=True).to(device)
 
         subband_spec = []
         subband_spec_norm = []
@@ -314,8 +324,17 @@ class Apollo(BaseModel):
             est_spec.append(torch.complex(this_RI[:, 0], this_RI[:, 1]))
         est_spec = torch.cat(est_spec, 1)
         est_spec = est_spec.to(dtype=torch.complex64)
-        output = torch.istft(est_spec, n_fft=self.win, hop_length=self.stride,
-                             window=torch.hann_window(self.win).to(input.device), length=nsample).view(B, nch, -1)
+        
+        # ISTFT - PyTorch 2.5+ supports MPS, fallback to CPU for older versions
+        device = input.device
+        window = torch.hann_window(self.win).to(device)
+        try:
+            output = torch.istft(est_spec, n_fft=self.win, hop_length=self.stride,
+                                 window=window, length=nsample).view(B, nch, -1)
+        except Exception:
+            # Fallback for older PyTorch on MPS
+            output = torch.istft(est_spec.cpu(), n_fft=self.win, hop_length=self.stride,
+                                 window=window.cpu(), length=nsample).to(device).view(B, nch, -1)
 
         return output
 

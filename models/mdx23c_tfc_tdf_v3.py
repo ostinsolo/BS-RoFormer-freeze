@@ -12,41 +12,28 @@ class STFT:
         self.device = None  # Store device for MPS workaround
 
     def __call__(self, x):
-        # MPS workaround: move to CPU for STFT operations
-        x_is_mps = x.device.type == "mps"
+        # PyTorch 2.5+: STFT works on MPS, try native first
         original_device = x.device
-        if x_is_mps:
-            x = x.cpu()
-            self.device = original_device
-        
         window = self.window.to(x.device)
         batch_dims = x.shape[:-2]
         c, t = x.shape[-2:]
         x = x.reshape([-1, t])
-        x = torch.stft(
-            x,
-            n_fft=self.n_fft,
-            hop_length=self.hop_length,
-            window=window,
-            center=True,
-            return_complex=True
-        )
+        
+        try:
+            x = torch.stft(x, n_fft=self.n_fft, hop_length=self.hop_length, window=window, center=True, return_complex=True)
+        except Exception:
+            # Fallback for older PyTorch on MPS
+            x = torch.stft(x.cpu(), n_fft=self.n_fft, hop_length=self.hop_length, window=self.window, center=True, return_complex=True).to(original_device)
+        
         x = torch.view_as_real(x)
         x = x.permute([0, 3, 1, 2])
         x = x.reshape([*batch_dims, c, 2, -1, x.shape[-1]]).reshape([*batch_dims, c * 2, -1, x.shape[-1]])
         
-        if x_is_mps:
-            x = x.to(original_device)
-        
         return x[..., :self.dim_f, :]
 
     def inverse(self, x):
-        # MPS workaround: move to CPU for iSTFT operations
-        x_is_mps = x.device.type == "mps"
+        # PyTorch 2.5+: ISTFT works on MPS, try native first
         original_device = x.device
-        if x_is_mps:
-            x = x.cpu()
-        
         window = self.window.to(x.device)
         batch_dims = x.shape[:-3]
         c, f, t = x.shape[-3:]
@@ -56,12 +43,14 @@ class STFT:
         x = x.reshape([*batch_dims, c // 2, 2, n, t]).reshape([-1, 2, n, t])
         x = x.permute([0, 2, 3, 1])
         x = x[..., 0] + x[..., 1] * 1.j
-        x = torch.istft(x, n_fft=self.n_fft, hop_length=self.hop_length, window=window, center=True)
+        
+        try:
+            x = torch.istft(x, n_fft=self.n_fft, hop_length=self.hop_length, window=window, center=True)
+        except Exception:
+            # Fallback for older PyTorch on MPS
+            x = torch.istft(x.cpu(), n_fft=self.n_fft, hop_length=self.hop_length, window=self.window, center=True).to(original_device)
+        
         x = x.reshape([*batch_dims, 2, -1])
-        
-        if x_is_mps:
-            x = x.to(original_device)
-        
         return x
 
 
