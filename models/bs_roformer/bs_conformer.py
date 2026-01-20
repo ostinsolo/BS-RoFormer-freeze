@@ -694,7 +694,8 @@ class BSConformer(Module):
             # rearrange on CPU (einops doesn't support ComplexFloat on MPS)
             stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s = self.audio_channels)
             if self.zero_dc:
-                stft_repr = stft_repr.index_fill(1, tensor(0, device = 'cpu'), 0.)
+                # index_fill doesn't support ComplexFloat, use direct indexing
+                stft_repr[:, 0, :] = 0.
             # istft on CPU
             recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window = stft_window.cpu(), return_complex = False, length = raw_audio.shape[-1]).to(device)
         else:
@@ -704,7 +705,8 @@ class BSConformer(Module):
             # iSTFT
             stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s = self.audio_channels)
             if self.zero_dc:
-                stft_repr = stft_repr.index_fill(1, tensor(0, device = device), 0.)
+                # index_fill doesn't support ComplexFloat, use direct indexing
+                stft_repr[:, 0, :] = 0.
             try:
                 recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window = stft_window, return_complex = False, length = raw_audio.shape[-1])
             except:

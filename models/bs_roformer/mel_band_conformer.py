@@ -604,6 +604,8 @@ class MelBandConformer(Module):
         d - feature dim
         """
         device = raw_audio.device
+        # MPS workaround: detect if running on Apple Silicon GPU
+        x_is_mps = device.type == "mps"
 
         if raw_audio.ndim == 2:
             raw_audio = rearrange(raw_audio, 'b t -> b 1 t')
@@ -617,7 +619,12 @@ class MelBandConformer(Module):
 
         raw_audio, batch_audio_channel_packed_shape = pack_one(raw_audio, '* t')
         stft_window = self.stft_window_fn(device=device)
-        stft_repr = torch.stft(raw_audio, **self.stft_kwargs, window=stft_window, return_complex=True)
+        # MPS: STFT may not be fully supported, use try/except with CPU fallback
+        try:
+            stft_repr = torch.stft(raw_audio, **self.stft_kwargs, window=stft_window, return_complex=True)
+        except:
+            stft_repr = torch.stft(raw_audio.cpu() if x_is_mps else raw_audio, **self.stft_kwargs,
+                                   window=stft_window.cpu() if x_is_mps else stft_window, return_complex=True).to(device)
         stft_repr = torch.view_as_real(stft_repr)
         stft_repr = unpack_one(stft_repr, batch_audio_channel_packed_shape, '* f t c')
 
@@ -684,11 +691,19 @@ class MelBandConformer(Module):
         masks = torch.view_as_complex(masks)
         masks = masks.type(stft_repr.dtype)
 
-        scatter_indices = repeat(self.freq_indices, 'f -> b n f t', b=batch, n=num_stems, t=stft_repr.shape[-1])
-        stft_repr_expanded_stems = repeat(stft_repr, 'b 1 ... -> b n ...', n=num_stems)
-        masks_summed = torch.zeros_like(stft_repr_expanded_stems).scatter_add_(2, scatter_indices, masks)
+        # MPS: scatter_add_ on complex tensors needs CPU fallback
+        if x_is_mps:
+            scatter_indices = repeat(self.freq_indices.cpu(), 'f -> b n f t', b=batch, n=num_stems, t=stft_repr.shape[-1])
+            stft_repr_expanded_stems = repeat(stft_repr, 'b 1 ... -> b n ...', n=num_stems)
+            masks_summed = torch.zeros_like(stft_repr_expanded_stems.cpu()).scatter_add_(2, scatter_indices, masks.cpu()).to(device)
+        else:
+            scatter_indices = repeat(self.freq_indices, 'f -> b n f t', b=batch, n=num_stems, t=stft_repr.shape[-1])
+            stft_repr_expanded_stems = repeat(stft_repr, 'b 1 ... -> b n ...', n=num_stems)
+            masks_summed = torch.zeros_like(stft_repr_expanded_stems).scatter_add_(2, scatter_indices, masks)
 
         denom = repeat(self.num_bands_per_freq, 'f -> (f r) 1', r=channels)
+        if x_is_mps:
+            denom = denom.cpu()
         masks_averaged = masks_summed / denom.clamp(min=1e-8)
 
         stft_repr = stft_repr * masks_averaged
@@ -696,15 +711,33 @@ class MelBandConformer(Module):
         stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s=self.audio_channels)
 
         if self.zero_dc:
-            stft_repr = stft_repr.index_fill(1, torch.tensor(0, device=device), 0.)
+            # index_fill doesn't support ComplexFloat, use direct indexing
+            if x_is_mps:
+                stft_repr_cpu = stft_repr.cpu()
+                stft_repr_cpu[:, 0, :] = 0.
+                stft_repr = stft_repr_cpu
+            else:
+                stft_repr[:, 0, :] = 0.
 
-        recon_audio = torch.istft(
-            stft_repr,
-            **self.stft_kwargs,
-            window=stft_window,
-            return_complex=False,
-            length=istft_length
-        )
+        # MPS: istft needs CPU fallback
+        try:
+            recon_audio = torch.istft(
+                stft_repr.cpu() if x_is_mps else stft_repr,
+                **self.stft_kwargs,
+                window=stft_window.cpu() if x_is_mps else stft_window,
+                return_complex=False,
+                length=istft_length
+            )
+            if x_is_mps:
+                recon_audio = recon_audio.to(device)
+        except:
+            recon_audio = torch.istft(
+                stft_repr.cpu(),
+                **self.stft_kwargs,
+                window=stft_window.cpu(),
+                return_complex=False,
+                length=istft_length
+            ).to(device)
 
         recon_audio = rearrange(recon_audio, '(b n s) t -> b n s t', b=batch, s=self.audio_channels, n=num_stems)
         if num_stems == 1:

@@ -688,11 +688,13 @@ class MelBandRoformer(Module):
 
         if self.zero_dc:
             # whether to dc filter
-            # MPS: complex index_fill not supported, do on CPU
+            # Note: index_fill doesn't support ComplexFloat, use direct indexing instead
             if x_is_mps:
-                stft_repr = stft_repr.cpu().index_fill(1, tensor(0, device='cpu'), 0.)
+                stft_repr_cpu = stft_repr.cpu()
+                stft_repr_cpu[:, 0, :] = 0.
+                stft_repr = stft_repr_cpu
             else:
-                stft_repr = stft_repr.index_fill(1, tensor(0, device=device), 0.)
+                stft_repr[:, 0, :] = 0.
 
         # MPS: perform istft on CPU since FFT ops may not be fully supported
         try:
