@@ -650,6 +650,7 @@ class MelBandRoformer(Module):
         # MPS: ComplexFloat not fully supported, do these ops on CPU
 
         if x_is_mps:
+            # MPS: ComplexFloat not supported - keep all complex ops on CPU
             stft_repr_cpu = stft_repr.cpu()
             masks_cpu = masks.cpu()
             stft_repr_complex = torch.view_as_complex(stft_repr_cpu)
@@ -664,8 +665,8 @@ class MelBandRoformer(Module):
             denom = repeat(self.num_bands_per_freq.cpu(), 'f -> (f r) 1', r=channels)
             masks_averaged = masks_summed / denom.clamp(min=1e-8)
             
-            # modulate stft repr with estimated mask
-            stft_repr = (stft_repr_complex * masks_averaged).to(device)
+            # modulate stft repr with estimated mask - KEEP ON CPU (ComplexFloat can't go to MPS)
+            stft_repr = stft_repr_complex * masks_averaged  # Stay on CPU
         else:
             stft_repr = torch.view_as_complex(stft_repr)
             masks = torch.view_as_complex(masks)
@@ -689,31 +690,37 @@ class MelBandRoformer(Module):
         if self.zero_dc:
             # whether to dc filter
             # Note: index_fill doesn't support ComplexFloat, use direct indexing instead
-            if x_is_mps:
-                stft_repr_cpu = stft_repr.cpu()
-                stft_repr_cpu[:, 0, :] = 0.
-                stft_repr = stft_repr_cpu
-            else:
-                stft_repr[:, 0, :] = 0.
+            # When x_is_mps, stft_repr is already on CPU (ComplexFloat can't be on MPS)
+            stft_repr[:, 0, :] = 0.
 
-        # MPS: perform istft on CPU since FFT ops may not be fully supported
-        try:
+        # Perform istft - stft_repr is on CPU when x_is_mps, otherwise on device
+        if x_is_mps:
+            # stft_repr is already on CPU from the complex operations above
             recon_audio = torch.istft(
-                stft_repr.cpu() if x_is_mps else stft_repr, 
-                **self.stft_kwargs, 
-                window=stft_window.cpu() if x_is_mps else stft_window, 
-                return_complex=False,
-                length=istft_length
-            )
-        except:
-            # Fallback for older PyTorch or MPS issues
-            recon_audio = torch.istft(
-                stft_repr.cpu(), 
+                stft_repr,  # Already on CPU
                 **self.stft_kwargs, 
                 window=stft_window.cpu(), 
                 return_complex=False,
                 length=istft_length
             )
+        else:
+            try:
+                recon_audio = torch.istft(
+                    stft_repr, 
+                    **self.stft_kwargs, 
+                    window=stft_window, 
+                    return_complex=False,
+                    length=istft_length
+                )
+            except:
+                # Fallback for older PyTorch
+                recon_audio = torch.istft(
+                    stft_repr.cpu(), 
+                    **self.stft_kwargs, 
+                    window=stft_window.cpu(), 
+                    return_complex=False,
+                    length=istft_length
+                )
 
         recon_audio = rearrange(recon_audio, '(b n s) t -> b n s t', b=batch, s=self.audio_channels, n=num_stems)
 
