@@ -638,9 +638,6 @@ class BSRoformer(Module):
                 stft_repr = rearrange(stft_repr.cpu(), 'b n (f s) t -> (b n s) f t', s=self.audio_channels)
                 recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window=stft_window.cpu(), return_complex=False, length=raw_audio.shape[-1]).to(device)
         else:
-            stft_repr = torch.view_as_complex(stft_repr)
-            mask = torch.view_as_complex(mask)
-            stft_repr = stft_repr * mask
             stft_repr = rearrange(stft_repr, 'b n (f s) t -> (b n s) f t', s=self.audio_channels)
             try:
                 recon_audio = torch.istft(stft_repr, **self.stft_kwargs, window=stft_window, return_complex=False, length=raw_audio.shape[-1])
