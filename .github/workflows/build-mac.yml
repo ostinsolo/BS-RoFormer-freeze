@@ -22,8 +22,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          # PyTorch 2.5.0 has better MPS ComplexFloat support (STFT/ISTFT on GPU)
-          pip install torch==2.5.0 torchaudio==2.5.0
+          # PyTorch 2.9.x has critical MPS memory fixes (buffer size errors in 2.5)
+          pip install torch torchaudio
           pip install "numpy<2" scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib cx-Freeze==6.15.16
       
       - name: Build executable
