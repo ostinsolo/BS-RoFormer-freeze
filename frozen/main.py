@@ -337,8 +337,8 @@ def load_model(model_name, models_dir=None):
     
     model, config = get_model_from_config(model_info["type"], config_path)
     
-    # Load checkpoint
-    state_dict = torch.load(checkpoint_path, map_location='cpu')
+    # Load checkpoint (weights_only=False needed for PyTorch 2.6+ which changed the default)
+    state_dict = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     if 'state_dict' in state_dict:
         state_dict = state_dict['state_dict']
     elif 'state' in state_dict:
