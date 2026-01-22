@@ -62,17 +62,32 @@ jobs:
       # Copy llvmlite.libs folder (contains msvcp140-*.dll required on Windows)
       - name: Copy llvmlite.libs (MSVC runtime)
         run: |
-          $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
-          $llvmliteLibs = Join-Path $sitePackages "llvmlite.libs"
+          # Find llvmlite location from actual import path (most reliable)
+          $llvmliteDir = python -c "import llvmlite; import os; print(os.path.dirname(llvmlite.__file__))"
+          $sitePackagesDir = Split-Path $llvmliteDir -Parent
+          $llvmliteLibs = Join-Path $sitePackagesDir "llvmlite.libs"
+          Write-Host "llvmlite installed at: $llvmliteDir"
           Write-Host "Looking for llvmlite.libs at: $llvmliteLibs"
           if (Test-Path $llvmliteLibs) {
             New-Item -ItemType Directory -Force -Path "frozen/dist/lib/llvmlite.libs"
             Copy-Item -Path "$llvmliteLibs\*" -Destination "frozen/dist/lib/llvmlite.libs" -Recurse -Force
-            Write-Host "Copied llvmlite.libs folder"
+            Write-Host "SUCCESS: Copied llvmlite.libs folder"
             Get-ChildItem -Path "frozen/dist/lib/llvmlite.libs" -Recurse
           } else {
-            Write-Host "llvmlite.libs not found - checking alternative locations"
-            Get-ChildItem -Path $sitePackages -Filter "llvmlite*" -Directory
+            Write-Host "WARNING: llvmlite.libs not found, searching alternatives..."
+            # Try site.getsitepackages as fallback
+            $altSitePackages = python -c "import site; print(site.getsitepackages()[0])"
+            $altPath = Join-Path $altSitePackages "llvmlite.libs"
+            if (Test-Path $altPath) {
+              New-Item -ItemType Directory -Force -Path "frozen/dist/lib/llvmlite.libs"
+              Copy-Item -Path "$altPath\*" -Destination "frozen/dist/lib/llvmlite.libs" -Recurse -Force
+              Write-Host "SUCCESS: Copied from alt location"
+            } else {
+              Write-Host "ERROR: llvmlite.libs not found anywhere!"
+              Get-ChildItem -Path $sitePackagesDir -Filter "llvmlite*"
+              Get-ChildItem -Path $altSitePackages -Filter "llvmlite*"
+              exit 1
+            }
           }
         shell: pwsh
       - run: .\frozen\dist\mss-separate.exe --list-models
@@ -139,17 +154,32 @@ jobs:
       # Copy llvmlite.libs folder (contains msvcp140-*.dll required on Windows)
       - name: Copy llvmlite.libs (MSVC runtime)
         run: |
-          $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
-          $llvmliteLibs = Join-Path $sitePackages "llvmlite.libs"
+          # Find llvmlite location from actual import path (most reliable)
+          $llvmliteDir = python -c "import llvmlite; import os; print(os.path.dirname(llvmlite.__file__))"
+          $sitePackagesDir = Split-Path $llvmliteDir -Parent
+          $llvmliteLibs = Join-Path $sitePackagesDir "llvmlite.libs"
+          Write-Host "llvmlite installed at: $llvmliteDir"
           Write-Host "Looking for llvmlite.libs at: $llvmliteLibs"
           if (Test-Path $llvmliteLibs) {
             New-Item -ItemType Directory -Force -Path "frozen/dist/lib/llvmlite.libs"
             Copy-Item -Path "$llvmliteLibs\*" -Destination "frozen/dist/lib/llvmlite.libs" -Recurse -Force
-            Write-Host "Copied llvmlite.libs folder"
+            Write-Host "SUCCESS: Copied llvmlite.libs folder"
             Get-ChildItem -Path "frozen/dist/lib/llvmlite.libs" -Recurse
           } else {
-            Write-Host "llvmlite.libs not found - checking alternative locations"
-            Get-ChildItem -Path $sitePackages -Filter "llvmlite*" -Directory
+            Write-Host "WARNING: llvmlite.libs not found, searching alternatives..."
+            # Try site.getsitepackages as fallback
+            $altSitePackages = python -c "import site; print(site.getsitepackages()[0])"
+            $altPath = Join-Path $altSitePackages "llvmlite.libs"
+            if (Test-Path $altPath) {
+              New-Item -ItemType Directory -Force -Path "frozen/dist/lib/llvmlite.libs"
+              Copy-Item -Path "$altPath\*" -Destination "frozen/dist/lib/llvmlite.libs" -Recurse -Force
+              Write-Host "SUCCESS: Copied from alt location"
+            } else {
+              Write-Host "ERROR: llvmlite.libs not found anywhere!"
+              Get-ChildItem -Path $sitePackagesDir -Filter "llvmlite*"
+              Get-ChildItem -Path $altSitePackages -Filter "llvmlite*"
+              exit 1
+            }
           }
         shell: pwsh
       - run: .\frozen\dist\mss-separate.exe --list-models
