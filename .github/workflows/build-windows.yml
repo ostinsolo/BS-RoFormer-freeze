@@ -16,25 +16,63 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - run: pip install --upgrade pip
+      # Skip pip upgrade to avoid WinError 5 permission issues
       - run: pip install "numpy<2" "cx-Freeze==6.15.16"
-      - run: pip install torch==2.2.2 torchaudio==2.2.2
+      # PyTorch 2.10.0 - latest stable with best Windows support
+      - run: pip install torch==2.10.0 torchaudio==2.10.0
+      # Install numba and llvmlite explicitly for librosa
+      - run: pip install numba llvmlite
       - run: pip install scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib
+      # Build with comprehensive torch subpackages list
       - run: |
           cd frozen
-          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
+          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,torch.nn,torch.nn.modules,torch.nn.functional,torch.utils,torch.utils.data,torch.fft,torch.linalg,torch.autograd,torch.backends,torch.backends.mkl,torch.backends.mkldnn,torch.backends.cudnn,torch.cuda,torch.package,torch.package.analyze,torch._C,torch._jit_internal,torch.jit,torch.onnx,torch.optim,torch.distributions,torch.sparse,torch.special,torch.serialization,numpy,scipy,scipy.signal,scipy.fft,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib,numba,llvmlite
+        shell: pwsh
       - run: |
           Copy-Item -Path "configs" -Destination "frozen/dist/configs" -Recurse
           Copy-Item -Path "models" -Destination "frozen/dist/models" -Recurse
           Copy-Item -Path "utils" -Destination "frozen/dist/utils" -Recurse
           New-Item -ItemType Directory -Force -Path "frozen/dist/weights"
         shell: pwsh
+      # Copy soundfile data
       - run: |
           $soundfileDir = python -c "import soundfile; import os; print(os.path.dirname(soundfile.__file__))"
           $soundfileData = Join-Path $soundfileDir "_soundfile_data"
           if (Test-Path $soundfileData) {
             New-Item -ItemType Directory -Force -Path "frozen/dist/lib"
             Copy-Item -Path $soundfileData -Destination "frozen/dist/lib/_soundfile_data" -Recurse
+          }
+        shell: pwsh
+      # Copy llvmlite DLLs (required by numba/librosa)
+      - name: Copy llvmlite DLLs
+        run: |
+          $llvmliteDir = python -c "import llvmlite; import os; print(os.path.dirname(llvmlite.__file__))"
+          $llvmliteBinding = Join-Path $llvmliteDir "binding"
+          Write-Host "llvmlite directory: $llvmliteDir"
+          Write-Host "llvmlite binding: $llvmliteBinding"
+          if (Test-Path $llvmliteBinding) {
+            New-Item -ItemType Directory -Force -Path "frozen/dist/lib/llvmlite/binding"
+            Copy-Item -Path "$llvmliteBinding\*" -Destination "frozen/dist/lib/llvmlite/binding" -Recurse -Force
+            Write-Host "Copied llvmlite binding files"
+            Get-ChildItem -Path "frozen/dist/lib/llvmlite/binding" -Recurse
+          } else {
+            Write-Host "llvmlite binding directory not found!"
+          }
+        shell: pwsh
+      # Copy llvmlite.libs folder (contains msvcp140-*.dll required on Windows)
+      - name: Copy llvmlite.libs (MSVC runtime)
+        run: |
+          $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
+          $llvmliteLibs = Join-Path $sitePackages "llvmlite.libs"
+          Write-Host "Looking for llvmlite.libs at: $llvmliteLibs"
+          if (Test-Path $llvmliteLibs) {
+            New-Item -ItemType Directory -Force -Path "frozen/dist/lib/llvmlite.libs"
+            Copy-Item -Path "$llvmliteLibs\*" -Destination "frozen/dist/lib/llvmlite.libs" -Recurse -Force
+            Write-Host "Copied llvmlite.libs folder"
+            Get-ChildItem -Path "frozen/dist/lib/llvmlite.libs" -Recurse
+          } else {
+            Write-Host "llvmlite.libs not found - checking alternative locations"
+            Get-ChildItem -Path $sitePackages -Filter "llvmlite*" -Directory
           }
         shell: pwsh
       - run: .\frozen\dist\mss-separate.exe --list-models
@@ -55,25 +93,63 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - run: pip install --upgrade pip
+      # Skip pip upgrade to avoid WinError 5 permission issues
       - run: pip install "numpy<2" "cx-Freeze==6.15.16"
-      - run: pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+      # PyTorch 2.10.0 with CUDA 12.6 - latest stable (matches local tested build)
+      - run: pip install torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu126
+      # Install numba and llvmlite explicitly for librosa
+      - run: pip install numba llvmlite
       - run: pip install scipy soundfile librosa tqdm pyyaml omegaconf ml_collections einops rotary-embedding-torch beartype loralib matplotlib
+      # Build with comprehensive torch subpackages list
       - run: |
           cd frozen
-          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,numpy,scipy,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib
+          cxfreeze main.py --target-dir=dist --target-name=mss-separate --packages=torch,torch.nn,torch.nn.modules,torch.nn.functional,torch.utils,torch.utils.data,torch.fft,torch.linalg,torch.autograd,torch.backends,torch.backends.mkl,torch.backends.mkldnn,torch.backends.cudnn,torch.cuda,torch.package,torch.package.analyze,torch._C,torch._jit_internal,torch.jit,torch.onnx,torch.optim,torch.distributions,torch.sparse,torch.special,torch.serialization,numpy,scipy,scipy.signal,scipy.fft,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib,numba,llvmlite
+        shell: pwsh
       - run: |
           Copy-Item -Path "configs" -Destination "frozen/dist/configs" -Recurse
           Copy-Item -Path "models" -Destination "frozen/dist/models" -Recurse
           Copy-Item -Path "utils" -Destination "frozen/dist/utils" -Recurse
           New-Item -ItemType Directory -Force -Path "frozen/dist/weights"
         shell: pwsh
+      # Copy soundfile data
       - run: |
           $soundfileDir = python -c "import soundfile; import os; print(os.path.dirname(soundfile.__file__))"
           $soundfileData = Join-Path $soundfileDir "_soundfile_data"
           if (Test-Path $soundfileData) {
             New-Item -ItemType Directory -Force -Path "frozen/dist/lib"
             Copy-Item -Path $soundfileData -Destination "frozen/dist/lib/_soundfile_data" -Recurse
+          }
+        shell: pwsh
+      # Copy llvmlite DLLs (required by numba/librosa)
+      - name: Copy llvmlite DLLs
+        run: |
+          $llvmliteDir = python -c "import llvmlite; import os; print(os.path.dirname(llvmlite.__file__))"
+          $llvmliteBinding = Join-Path $llvmliteDir "binding"
+          Write-Host "llvmlite directory: $llvmliteDir"
+          Write-Host "llvmlite binding: $llvmliteBinding"
+          if (Test-Path $llvmliteBinding) {
+            New-Item -ItemType Directory -Force -Path "frozen/dist/lib/llvmlite/binding"
+            Copy-Item -Path "$llvmliteBinding\*" -Destination "frozen/dist/lib/llvmlite/binding" -Recurse -Force
+            Write-Host "Copied llvmlite binding files"
+            Get-ChildItem -Path "frozen/dist/lib/llvmlite/binding" -Recurse
+          } else {
+            Write-Host "llvmlite binding directory not found!"
+          }
+        shell: pwsh
+      # Copy llvmlite.libs folder (contains msvcp140-*.dll required on Windows)
+      - name: Copy llvmlite.libs (MSVC runtime)
+        run: |
+          $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
+          $llvmliteLibs = Join-Path $sitePackages "llvmlite.libs"
+          Write-Host "Looking for llvmlite.libs at: $llvmliteLibs"
+          if (Test-Path $llvmliteLibs) {
+            New-Item -ItemType Directory -Force -Path "frozen/dist/lib/llvmlite.libs"
+            Copy-Item -Path "$llvmliteLibs\*" -Destination "frozen/dist/lib/llvmlite.libs" -Recurse -Force
+            Write-Host "Copied llvmlite.libs folder"
+            Get-ChildItem -Path "frozen/dist/lib/llvmlite.libs" -Recurse
+          } else {
+            Write-Host "llvmlite.libs not found - checking alternative locations"
+            Get-ChildItem -Path $sitePackages -Filter "llvmlite*" -Directory
           }
         shell: pwsh
       - run: .\frozen\dist\mss-separate.exe --list-models
@@ -116,17 +192,20 @@ jobs:
             
             State-of-the-art music source separation using BS-RoFormer architecture.
             
-            ### Supported Models (9 total)
-            - bsroformer_4stem, bsrofo_sw (6-stem)
-            - vocals_melband (SDR 10.98), vocals_bsroformer_viperx, vocals_mdx23c
-            - denoise (SDR 27.99), dereverb (SDR 19.17)
-            - drumsep_mdx23c_aufr33, drumsep_mdx23c_jarredou
+            ### Supported Models (31 total)
+            - **4-stem**: scnet_xl_ihf (BEST SDR 10.08), bsroformer_4stem, aname_4stem_large
+            - **6-stem**: bsrofo_sw (BEST), logic_roformer (BEST BASS)
+            - **Vocals**: vocals_melband (SDR 10.98), vocals_bsroformer_viperx, revive2_vocals (Bleedless 40.07)
+            - **Instrumental**: karaoke_becruily (BEST), gabox_inst_fv7z, inst_v1e_plus
+            - **Effects**: denoise (SDR 27.99), dereverb (SDR 19.17), bleed_suppressor
+            - **Drums**: drumsep_mdx23c_jarredou (5-stem), drumsep_mdx23c_aufr33 (6-stem)
+            - **Specialty**: apollo (vocal restoration), guitar_becruily, aspiration (de-breathe)
             
             ### Windows Downloads
-            | Platform | File | Notes |
-            |----------|------|-------|
-            | Windows CPU | mss-separate-win-cpu.zip | CPU only |
-            | Windows CUDA | mss-separate-win-cuda.7z | GPU accelerated |
+            | Platform | File | PyTorch | Notes |
+            |----------|------|---------|-------|
+            | Windows CPU | mss-separate-win-cpu.zip | 2.10.0 | CPU only |
+            | Windows CUDA | mss-separate-win-cuda.7z | 2.10.0+cu126 | NVIDIA GPU accelerated |
             
             *macOS builds available separately*
           files: |
@@ -134,4 +213,3 @@ jobs:
             ./artifacts/mss-separate-win-cuda.7z
           draft: false
           prerelease: false
-

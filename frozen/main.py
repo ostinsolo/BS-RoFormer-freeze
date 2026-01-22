@@ -46,6 +46,28 @@ if getattr(sys, 'frozen', False):
     inspect.findsource = _safe_findsource
 # ============================================================================
 
+# ============================================================================
+# Windows DLL search path fix for llvmlite and other native extensions
+# Must be done BEFORE importing any package that uses llvmlite (like librosa)
+# ============================================================================
+if getattr(sys, 'frozen', False) and sys.platform == 'win32':
+    _exe_dir = os.path.dirname(sys.executable)
+    _lib_dir = os.path.join(_exe_dir, 'lib')
+    _llvmlite_dir = os.path.join(_lib_dir, 'llvmlite', 'binding')
+    
+    # Add DLL directories to Windows search path
+    if hasattr(os, 'add_dll_directory'):
+        if os.path.isdir(_exe_dir):
+            os.add_dll_directory(_exe_dir)
+        if os.path.isdir(_lib_dir):
+            os.add_dll_directory(_lib_dir)
+        if os.path.isdir(_llvmlite_dir):
+            os.add_dll_directory(_llvmlite_dir)
+    
+    # Also prepend to PATH for older Python/DLL loading methods
+    os.environ['PATH'] = _llvmlite_dir + os.pathsep + _lib_dir + os.pathsep + _exe_dir + os.pathsep + os.environ.get('PATH', '')
+# ============================================================================
+
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:

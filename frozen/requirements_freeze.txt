@@ -1,9 +1,14 @@
 # Minimal requirements for BS-RoFormer / MelBand RoFormer / MDX23C INFERENCE
 # NOTE: htdemucs models removed - use separate Demucs executable for those
+#
+# Version: 1.10.0 (January 2026)
+# - macOS ARM: Uses latest PyTorch (2.9+) for best MPS support
+# - macOS Intel: Uses PyTorch 2.2.2 (wheel-only for llvmlite compatibility)
+# - Windows: Uses PyTorch 2.5.1 (pinned for stability)
 
-# Core PyTorch
-torch==2.2.2
-torchaudio==2.2.2
+# Core PyTorch (version depends on platform - see build scripts)
+torch
+torchaudio
 
 # NumPy (must be < 2 for compatibility)
 numpy<2
@@ -30,4 +35,6 @@ loralib
 # For spectrograms (optional but used in inference.py)
 matplotlib
 
-# Note: cx-Freeze==6.15.16 + setuptools installed separately in build.sh
+# Note: Build tools installed separately:
+# - cx-Freeze==6.15.16
+# - numba + llvmlite (Windows only, for librosa)

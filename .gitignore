@@ -6,6 +6,11 @@
 .DS_Store
 Thumbs.db
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
 # Weights (too large for git)
 weights/*.ckpt
 weights/*.th

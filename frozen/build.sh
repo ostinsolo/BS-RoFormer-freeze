@@ -1,8 +1,11 @@
 #!/bin/bash
 #
-# Build frozen executable for Music Source Separation
-# Uses ONLY inference dependencies (no training deps)
+# Build frozen executable for Music Source Separation - macOS
 # Uses uv for fast, reliable package installation
+#
+# Usage: ./build.sh [arm|intel]
+#   - arm: Use latest PyTorch (for Apple Silicon)
+#   - intel: Use PyTorch 2.2.2 with wheel-only mode (for Intel Macs)
 #
 
 set -e
@@ -11,8 +14,19 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( dirname "$SCRIPT_DIR" )"
 BUILD_DIR="$SCRIPT_DIR/dist"
 
+# Detect architecture or use argument
+ARCH="${1:-auto}"
+if [ "$ARCH" = "auto" ]; then
+    if [ "$(uname -m)" = "arm64" ]; then
+        ARCH="arm"
+    else
+        ARCH="intel"
+    fi
+fi
+
 echo "============================================================"
 echo "Building Music Source Separation Executable"
+echo "Platform: macOS $ARCH"
 echo "============================================================"
 
 # Check if uv is available, install if not
@@ -29,23 +43,40 @@ echo "Creating clean environment with uv..."
 uv venv "$BUILD_VENV" --python 3.10
 source "$BUILD_VENV/bin/activate"
 
-# Install ONLY inference dependencies using uv
-# Force pre-built wheels only to avoid llvmlite/numba compilation issues
-echo "Installing minimal inference dependencies with uv..."
-echo "  (forcing pre-built wheels only)"
-
 # cx-Freeze needs setuptools
 uv pip install "setuptools<70,>=62.6" cx-Freeze==6.15.16
 
-uv pip install --only-binary :all: -r "$SCRIPT_DIR/requirements_freeze.txt" || {
-    echo ""
-    echo "Some packages don't have wheels. Trying with pinned versions..."
-    # These versions have known working wheels
-    uv pip install torch==2.2.2 torchaudio==2.2.2 "numpy<2" scipy soundfile \
-        librosa==0.10.1 llvmlite==0.41.1 numba==0.58.1 \
+# Install dependencies based on architecture
+if [ "$ARCH" = "arm" ]; then
+    echo "Installing dependencies for ARM (Apple Silicon)..."
+    echo "  (using latest PyTorch for best MPS support)"
+    uv pip install torch torchaudio "numpy<2" scipy soundfile \
+        librosa llvmlite numba \
         tqdm pyyaml omegaconf ml_collections \
         einops rotary-embedding-torch beartype loralib matplotlib
-}
+else
+    echo "Installing dependencies for Intel (wheel-only mode)..."
+    echo "  (forcing pre-built wheels to avoid llvmlite compilation)"
+    uv pip install --only-binary :all: torch==2.2.2 torchaudio==2.2.2 "numpy<2" scipy soundfile \
+        librosa llvmlite==0.41.1 numba==0.58.1 \
+        tqdm pyyaml omegaconf ml_collections \
+        einops rotary-embedding-torch beartype loralib matplotlib || {
+        echo ""
+        echo "Some packages don't have wheels. Trying with pinned versions..."
+        uv pip install torch==2.2.2 torchaudio==2.2.2 "numpy<2" scipy soundfile \
+            librosa==0.10.1 llvmlite==0.41.1 numba==0.58.1 \
+            tqdm pyyaml omegaconf ml_collections \
+            einops rotary-embedding-torch beartype loralib matplotlib
+    }
+fi
+
+# Show installed PyTorch version
+echo ""
+echo "Installed versions:"
+python -c "import torch; print(f'  PyTorch: {torch.__version__}')"
+python -c "import torchaudio; print(f'  Torchaudio: {torchaudio.__version__}')"
+python -c "import numba; print(f'  Numba: {numba.__version__}')" 2>/dev/null || echo "  Numba: not installed"
+echo ""
 
 # Clean previous build and any cached .pyc files that could have embedded paths
 rm -rf "$BUILD_DIR"
@@ -71,7 +102,6 @@ cxfreeze main.py \
     --target-name=mss-separate \
     --packages=torch,torch.nn,torch.nn.modules,torch.nn.functional,torch.utils,torch.utils.data,torch.fft,torch.linalg,torch.autograd,torch.backends,torch.backends.mkl,torch.backends.mkldnn,torch.backends.cudnn,torch.cuda,torch.package,torch.package.analyze,torch._C,torch._jit_internal,torch.jit,torch.onnx,torch.optim,torch.distributions,torch.sparse,torch.special,torch.serialization,numpy,scipy,scipy.signal,scipy.fft,soundfile,librosa,tqdm,yaml,omegaconf,ml_collections,einops,rotary_embedding_torch,beartype,loralib,numba
 
-# The executable is in BUILD_DIR now
 if [ ! -f "$BUILD_DIR/mss-separate" ]; then
     echo "Error: Build failed - executable not found"
     exit 1
@@ -91,6 +121,7 @@ SOUNDFILE_DATA=$(python -c "import soundfile; import os; print(os.path.dirname(s
 if [ -d "$SOUNDFILE_DATA" ]; then
     mkdir -p "$BUILD_DIR/lib"
     cp -r "$SOUNDFILE_DATA" "$BUILD_DIR/lib/"
+    echo "Copied soundfile data"
 fi
 
 # Copy download scripts
@@ -132,6 +163,13 @@ fi
 echo "OpenMP libraries after cleanup:"
 ls -la "$BUILD_DIR/lib/"*omp* 2>/dev/null || echo "  None found"
 
+# Verify build
+echo ""
+echo "Verifying build..."
+chmod +x "$BUILD_DIR/mss-separate"
+file "$BUILD_DIR/mss-separate"
+"$BUILD_DIR/mss-separate" --list-models 2>&1 | head -20
+
 echo ""
 echo "============================================================"
 echo "BUILD COMPLETE!"
@@ -140,6 +178,9 @@ echo "Output: $BUILD_DIR"
 echo "Size: $(du -sh "$BUILD_DIR" | cut -f1)"
 echo ""
 echo "Test: $BUILD_DIR/mss-separate --list-models"
+echo ""
+echo "To package for distribution:"
+echo "  cd frozen && tar -czf mss-separate-macos-$ARCH.tar.gz dist"
 echo ""
 
 deactivate
